@@ -97,8 +97,8 @@ class SistemaLineal:
         # (1) Detectar columnas pivote buscando un 1 aislado en cada columna
         for j in range(m):
             for i in range(n):
-                if abs(self.matriz[i][j] - 1) < 1e-10 and all(
-                        abs(self.matriz[k][j]) < 1e-10 for k in range(n) if k != i):
+                if (abs(self.matriz[i][j] - 1) < 1e-10 and 
+                    all(abs(self.matriz[k][j]) < 1e-10 for k in range(n) if k != i)):
                     pivotes[j] = i
                     columnas_pivote.append(j + 1)
                     break
@@ -109,7 +109,7 @@ class SistemaLineal:
             if all(abs(val) < 1e-10 for val in fila[:-1]) and abs(fila[-1]) > 1e-10
         ]
         # Marcador de inconsistencia (si existe, el sistema no tiene solución)
-        inconsistente_var = set(f"x{i + 1}" for i in fila_inconsistente)
+        inconsistente_var = {f"x{i + 1}" for i in fila_inconsistente}
 
         # (3) Construir expresiones de cada variable x_j
         for j in range(m):
@@ -133,13 +133,13 @@ class SistemaLineal:
                         # Al pasar al otro lado cambia el signo
                         coef = -self.matriz[fila][k]
                         coef_str = (f"{int(coef)}" if float(coef).is_integer() else f"{coef:.2f}")
-                        # Construimos “+/- coef * x_k”
+                        # Construimos "+/- coef * x_k"
                         if coef < 0:
                             terminos.append(f"{coef_str}x{k + 1}")
                         else:
                             terminos.append(f"+ {coef_str}x{k + 1}")
 
-                # Armamos “x_j = <constante> ± ...” con cuidado de los signos y el caso 0
+                # Armamos "x_j = <constante> ± ..." con cuidado de los signos y el caso 0
                 if constante_str == "0" and not terminos:
                     ecuacion = "0"
                 else:
@@ -170,8 +170,9 @@ class SistemaLineal:
         elif any(pivote == -1 for pivote in pivotes):
             resultado += "\nHay infinitas soluciones debido a variables libres.\n"
         else:
-            # Todas las variables fijadas: si todas son 0, lo indicamos como “trivial”
-            if len(soluciones_numericas) == m and all(abs(val) < 1e-10 for val in soluciones_numericas.values()):
+            # Todas las variables fijadas: si todas son 0, lo indicamos como "trivial"
+            if (len(soluciones_numericas) == m and 
+                all(abs(val) < 1e-10 for val in soluciones_numericas.values())):
                 resultado += "\nSolución trivial.\n"
             else:
                 resultado += "\nLa solución es única.\n"
@@ -204,23 +205,17 @@ class SistemaLineal:
             except ValueError:
                 print("Entrada no válida. Intenta de nuevo.")
 
-        print("\nIntroduce cada fila de la MATRIZ AUMENTADA con", n + 1, "valores separados por espacio.")
+        print(f"\nIntroduce cada fila de la MATRIZ AUMENTADA con {n + 1} valores separados por espacio.")
         print("Ejemplo (n=3):  2 -1 3 5   ← equivale a [2, -1, 3 | 5]\n")
 
-        # Sin usar .append: construimos la matriz con comprensión de listas
-        matriz = [
-            # Para cada i, pedimos una línea, limpiamos el '|' si lo escribe el usuario,
-            # partimos por espacios y convertimos a float.
-            (lambda partes: [float(x) for x in partes])(
-                input(f"Fila {i+1}: ").replace("|", " ").split()
-            )
-            for i in range(m)
-        ]
-
-        # Validación de longitud por fila
-        for i, fila in enumerate(matriz, start=1):
+        # Construimos la matriz con comprensión de listas más eficiente
+        matriz = []
+        for i in range(m):
+            entrada = input(f"Fila {i+1}: ").replace("|", " ").split()
+            fila = [float(x) for x in entrada]
             if len(fila) != n + 1:
-                raise ValueError(f"La fila {i} no tiene {n+1} números.")
+                raise ValueError(f"La fila {i+1} no tiene {n+1} números.")
+            matriz.append(fila)
 
         return SistemaLineal(matriz)
 
