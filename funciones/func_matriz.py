@@ -46,7 +46,7 @@ class OperacionesMatrices:
 
         return matriz
 
-    # Creo que es obvio que este método no hace nada, ¿verdad?
+    # Creo que es obvio que este métodoo no hace nada, ¿verdad?
     @staticmethod
     def sumar_fila_por_escalar():
         print('hola')
