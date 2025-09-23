@@ -32,24 +32,24 @@ class OperacionesMatrices:
 
         return matriz
 
-    # Aún no funciona, retorna la fila sin alterar, ya encontré solución, pero tengo demasiado sueño y pereza
-    # para implementarla ahora mismo, con el tiempo que gasté escribiendo este comentario perfectamente
-    # pude haber implementado la solución, pero ni modo, así es la vida. (01:10 AM, 09.21.25)
-
     @staticmethod
     def multiplicar_escalar(matriz):
         resp_decision_fila = int(input(f'Multiplicar la fila\n-> '))
         resp_decision_escalar = int(input(f'Por el escalar (=/= 0)\n-> '))
 
         for i in range(len(matriz[resp_decision_fila-1])):
-            resp_decision_escalar *= matriz[resp_decision_fila-1][i]
+            matriz[resp_decision_fila-1][i] = resp_decision_escalar * matriz[resp_decision_fila-1][i]
 
         return matriz
 
-    # Creo que es obvio que este métodoo no hace nada, ¿verdad?
+    # No es completamente funcional aún
     @staticmethod
-    def sumar_fila_por_escalar():
-        print('hola')
+    def sumar_fila_por_escalar(matriz):
+        mult_escalar = OperacionesMatrices.multiplicar_escalar(matriz)
+        resp_sumar_fila = int(input(f'Y sumar la fila multiplicada a la fila\n-> '))
+
+        for i in range(len(matriz[resp_sumar_fila-1])):
+            matriz[resp_sumar_fila-1][i] = mult_escalar[i] + matriz[resp_sumar_fila-1][i]
 
 class DebugPrograma:
     @staticmethod
