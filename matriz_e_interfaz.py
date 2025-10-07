@@ -20,6 +20,8 @@ class SistemaLineal:
     def __init__(self, matriz_aumentada: List[List[float]]):
         self.matriz = [fila[:] for fila in matriz_aumentada]
 
+        self.homogeneo = all(abs(fila[-1]) < 1e-12 for fila in self.matriz)
+
     def _imprimir_matriz(self, paso: int, operacion: str) -> str:
         texto = f"Paso {paso} ({operacion}):\n"
         for fila in self.matriz:
@@ -67,6 +69,48 @@ class SistemaLineal:
 
         resultado += self._interpretar_resultado()
         return resultado
+    
+    def eliminacion_gaussiana_solo_pasos(self) -> str:
+        """Realiza la eliminación Gaussiana (con el mismo log de pasos) sin interpretar solución."""
+        if not self.matriz:
+            return "Matriz no válida."
+
+        paso = 1
+        resultado = ""
+        filas, columnas = len(self.matriz), len(self.matriz[0])
+        fila_actual = 0
+
+        for col in range(columnas - 1):  # ojo: última col es el término independiente
+            if fila_actual >= filas:
+                break
+
+            max_row = max(range(fila_actual, filas), key=lambda i: abs(self.matriz[i][col]))
+            if abs(self.matriz[max_row][col]) < 1e-12:
+                continue
+
+            if fila_actual != max_row:
+                self.matriz[fila_actual], self.matriz[max_row] = self.matriz[max_row], self.matriz[fila_actual]
+                resultado += self._imprimir_matriz(paso, f"Intercambio f{fila_actual + 1} ↔ f{max_row + 1}")
+                paso += 1
+
+            pivote = self.matriz[fila_actual][col]
+
+            if abs(pivote) > 1e-12:
+                self.matriz[fila_actual] = [x / pivote for x in self.matriz[fila_actual]]
+                resultado += self._imprimir_matriz(paso, f"f{fila_actual + 1} ← (1/{pivote:.4f}) · f{fila_actual + 1}")
+                paso += 1
+
+            for i in range(filas):
+                if i != fila_actual:
+                    factor = self.matriz[i][col]
+                    if abs(factor) > 1e-12:
+                        self.matriz[i] = [self.matriz[i][k] - factor * self.matriz[fila_actual][k] for k in range(columnas)]
+                        resultado += self._imprimir_matriz(paso, f"f{i + 1} ← f{i + 1} − ({factor:.4f}) · f{fila_actual + 1}")
+                        paso += 1
+
+            fila_actual += 1
+
+        return resultado
 
     def _interpretar_resultado(self) -> str:
         n, m = len(self.matriz), len(self.matriz[0]) - 1
@@ -76,14 +120,30 @@ class SistemaLineal:
         soluciones_numericas = {}
         columnas_pivote = []
 
-        for j in range(m):
-            for i in range(n):
-                if (abs(self.matriz[i][j] - 1) < 1e-10 and 
-                    all(abs(self.matriz[k][j]) < 1e-10 for k in range(n) if k != i)):
-                    pivotes[j] = i
-                    columnas_pivote.append(j + 1)
+        # === NUEVO: detectar pivotes por "leading 1" de cada fila ===
+        columnas_marcadas = set()
+        for i in range(n):
+            # buscar el primer índice no nulo (leading index) en las columnas de variables
+            j_lead = None
+            for j in range(m):
+                if abs(self.matriz[i][j]) > 1e-10:
+                    j_lead = j
                     break
+            if j_lead is None:
+                continue  # fila completamente nula en la parte de variables
 
+            # comprobar que en el leading index hay un 1 y que su columna es cero en las demás filas
+            es_uno = abs(self.matriz[i][j_lead] - 1) < 1e-10
+            columna_ceros_fuera = all(abs(self.matriz[k][j_lead]) < 1e-10 for k in range(n) if k != i)
+            # además, para ser leading 1, a la izquierda de j_lead la fila debe ser cero
+            izquierda_ceros = all(abs(self.matriz[i][k]) < 1e-10 for k in range(j_lead))
+
+            if es_uno and columna_ceros_fuera and izquierda_ceros and j_lead not in columnas_marcadas:
+                pivotes[j_lead] = i
+                columnas_pivote.append(j_lead + 1)
+                columnas_marcadas.add(j_lead)
+
+        # --- resto del método sigue igual a partir de aquí ---
         fila_inconsistente = [
             i for i, fila in enumerate(self.matriz)
             if all(abs(val) < 1e-10 for val in fila[:-1]) and abs(fila[-1]) > 1e-10
@@ -124,19 +184,51 @@ class SistemaLineal:
             if var_name in soluciones:
                 resultado += f"{soluciones[var_name]}\n"
 
-        if inconsistente_var:
+        rankA = len(columnas_pivote)
+        hay_libres = any(pivote == -1 for pivote in pivotes)
+
+        if fila_inconsistente:
             resultado += "\nEl sistema es inconsistente y no tiene soluciones.\n"
-        elif any(pivote == -1 for pivote in pivotes):
-            resultado += "\nHay infinitas soluciones debido a variables libres.\n"
         else:
-            if len(soluciones_numericas) == m and all(abs(val) < 1e-10 for val in soluciones_numericas.values()):
-                resultado += "\nSolución trivial.\n"
+            if self.homogeneo:
+                if hay_libres:
+                    resultado += (
+                        f"\nSistema homogéneo: hay variables libres ⇒ hay infinitas soluciones (incluye la trivial x = 0).\n"
+                        f"Diagnóstico: rango(A) = {rankA} < n = {m}. "
+                        f"No hay pivote en todas las columnas (no se logra RREF con pivote por columna). "
+                        f"⇒ La solución trivial **no es la única**.\n"
+                    )
+                else:
+                    resultado += "\nSistema homogéneo: la solución es única y trivial (x = 0).\n"
             else:
-                resultado += "\nLa solución es única.\n"
+                if hay_libres:
+                    resultado += "\nHay infinitas soluciones debido a variables libres.\n"
+                else:
+                    if len(soluciones_numericas) == m and all(abs(val) < 1e-10 for val in soluciones_numericas.values()):
+                        resultado += "\nSolución trivial.\n"
+                    else:
+                        resultado += "\nLa solución es única.\n"
 
-        resultado += f"\nLas columnas pivote son: {', '.join(map(str, columnas_pivote))}.\n"
+        resultado += f"\nLas columnas pivote son: {', '.join(map(str, columnas_pivote)) or '—'}.\n"
         return resultado
-
+    
+    def columnas_pivote(self, num_vars: int) -> list[int]:
+        """Devuelve las columnas pivote (1-based) entre las primeras num_vars columnas."""
+        n, m_tot = len(self.matriz), len(self.matriz[0])
+        m = min(num_vars, m_tot - 1)  # variables = primeras columnas; última es |b
+        cols = []
+        for i in range(n):
+            lead = None
+            for j in range(m):
+                if abs(self.matriz[i][j]) > 1e-10:
+                    lead = j
+                    break
+            if lead is None:
+                continue
+            if (abs(self.matriz[i][lead] - 1) < 1e-10 and
+                all(abs(self.matriz[k][lead]) < 1e-10 for k in range(n) if k != i)):
+                cols.append(lead + 1)  # 1-based
+        return cols
 
 # ============================
 # Clases para Vectores
@@ -310,7 +402,107 @@ class OperacionesVectoriales:
         
         # Usar el mismo método que combinación lineal
         return resultado + OperacionesVectoriales.combinacion_lineal(vectores, vector_objetivo)
+    
+    @staticmethod
+    def _rango_y_pivotes_por_filas(matriz: List[List[float]], eps: float = 1e-12) -> tuple[int, List[int]]:
+        """
+        Reduce por Gauss–Jordan (con pivoteo parcial) y devuelve:
+        - rango (número de filas no nulas al final),
+        - lista de índices de columnas pivote (0-based).
+        La matriz se modifica en una copia local.
+        """
+        if not matriz:
+            return 0, []
 
+        A = [fila[:] for fila in matriz]  # copia
+        m, n = len(A), len(A[0])
+        fila = 0
+        columnas_pivote: List[int] = []
+
+        for col in range(n):
+            # buscar pivote (máximo en valor absoluto desde 'fila')
+            piv = max(range(fila, m), key=lambda i: abs(A[i][col]), default=None)
+            if piv is None or abs(A[piv][col]) < eps:
+                continue
+            if piv != fila:
+                A[fila], A[piv] = A[piv], A[fila]
+
+            # normalizar fila de pivote
+            pivote = A[fila][col]
+            if abs(pivote) > eps:
+                A[fila] = [x / pivote for x in A[fila]]
+
+            # anular el resto de la columna
+            for i in range(m):
+                if i != fila and abs(A[i][col]) > eps:
+                    factor = A[i][col]
+                    A[i] = [A[i][k] - factor * A[fila][k] for k in range(n)]
+
+            columnas_pivote.append(col)
+            fila += 1
+            if fila == m:
+                break
+
+        rango = len(columnas_pivote)
+        return rango, columnas_pivote
+
+    @staticmethod
+    def dependencia_independencia(vectores: List['Vector']) -> str:
+        """Verifica independencia reutilizando el logger de pasos de SistemaLineal (Gauss-Jordan)."""
+        if not vectores:
+            return "No hay vectores para verificar independencia."
+
+        n = vectores[0].dimension
+        for v in vectores:
+            if v.dimension != n:
+                return "Error: los vectores tienen dimensiones diferentes."
+
+        k = len(vectores)
+
+        # Casos rápidos
+        if k == 1:
+            return ("=== Verificación de Independencia Lineal ===\n\n"
+                    f"Conjunto de 1 vector en ℝ^{n}.\n"
+                    f"{'Independiente (no es vector cero).' if not vectores[0].es_cero() else 'Dependiente (vector cero).'}\n")
+
+        if k > n:
+            return ("=== Verificación de Independencia Lineal ===\n\n"
+                    f"n = {n}, k = {k} > n ⇒ Dependiente.\n"
+                    "Motivo: hay más vectores que la dimensión del espacio.\n")
+
+        # M con vectores como columnas (n × k)
+        M = [[vectores[j].componentes[i] for j in range(k)] for i in range(n)]
+        # Matriz aumentada [M | 0] para usar el mismo motor de pasos
+        M_aug = [fila + [0.0] for fila in M]
+
+        sistema = SistemaLineal(M_aug)
+        # Para claridad en la cabecera
+        header = "=== Verificación de Independencia Lineal (usando pasos de Gauss del módulo de sistemas) ===\n\n"
+        header += "Matriz inicial [M | 0] (vectores como columnas y columna derecha nula):\n"
+        header += "\n".join("  ".join(f"{x:.4f}" for x in fila) for fila in M_aug) + "\n\n"
+
+        pasos = sistema.eliminacion_gaussiana_solo_pasos()  # SOLO pasos, sin interpretación Ax=b
+        cols_pivote = sistema.columnas_pivote(k)
+        rango = len(cols_pivote)
+
+        # Conclusión
+        out = [header, pasos]
+        out.append("=== Conclusión ===\n")
+        out.append(f"Dimensión del espacio: ℝ^{n}\n")
+        out.append(f"Número de vectores (k): {k}\n")
+        out.append(f"Rango (por pasos de Gauss): {rango}\n")
+        out.append(f"Columnas pivote (en los vectores): {', '.join(map(str, cols_pivote)) if cols_pivote else '—'}\n\n")
+
+        if rango == k:
+            out.append("r = k ⇒ Conjunto **INDEPENDIENTE**.\n"
+                       "El sistema homogéneo M·c = 0 solo admite la solución trivial c = 0.\n")
+        else:
+            libres = k - rango
+            out.append("r < k ⇒ Conjunto **DEPENDIENTE**.\n"
+                       f"Hay {libres} variable(s) libre(s); existen soluciones no triviales c ≠ 0 con M·c = 0.\n")
+
+        out.append("")
+        return "".join(out)
 
 # ============================
 # Clases para Matrices
@@ -419,7 +611,6 @@ class OperacionesMatriciales:
             resultado += f"Error: {e}\n"
         
         return resultado
-
 
 # ============================
 # Interfaz (Tkinter)
@@ -573,6 +764,19 @@ class AlgebraLinealGUI(ttk.Frame):
         self.var_m.set(3)
         self.var_n.set(3)
         self._render_grid(3, 3)
+
+    def _check_linear_independence(self):
+        """Verifica si el conjunto de vectores es linealmente independiente o dependiente."""
+        try:
+            vectores = self._read_vectors()
+            resultado = OperacionesVectoriales.dependencia_independencia(vectores)
+            self.txt_vectores.delete("1.0", tk.END)
+            self.txt_vectores.insert(tk.END, resultado)
+            self._status("Verificación de independencia lineal completada.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en verificación de independencia lineal.")
+    
     
     def _build_vectores_tab(self):
         # Frame para la pestaña de vectores
@@ -615,6 +819,8 @@ class AlgebraLinealGUI(ttk.Frame):
         ttk.Button(ops_buttons, text="Verificar propiedades", command=self._verify_properties).pack(side=tk.LEFT, padx=(0,8))
         ttk.Button(ops_buttons, text="Combinación lineal", command=self._linear_combination).pack(side=tk.LEFT, padx=(0,8))
         ttk.Button(ops_buttons, text="Ecuación vectorial", command=self._vector_equation).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(ops_buttons, text="Independencia lineal", command=self._check_linear_independence).pack(side=tk.LEFT, padx=(0,8))
+
         
         # Panel de entrada de vectores
         card_input = ttk.Frame(vectores_frame, style="Card.TFrame")
