@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 from typing import List
 
 """
@@ -10,7 +10,7 @@ Aplicación de una sola pieza (NO modular) con interfaz cuidada en Tkinter.
 - Ecuaciones vectoriales y matriciales.
 - UI con pestañas, validación de entradas, ayuda, exportar y copiar.
 
-Ejecuta:  python matriz_e_interfaz.py
+Ejecuta:  python matriz_e_interfaz.py
 """
 
 # ============================
@@ -19,7 +19,6 @@ Ejecuta:  python matriz_e_interfaz.py
 class SistemaLineal:
     def __init__(self, matriz_aumentada: List[List[float]]):
         self.matriz = [fila[:] for fila in matriz_aumentada]
-
         self.homogeneo = all(abs(fila[-1]) < 1e-12 for fila in self.matriz)
 
     def _imprimir_matriz(self, paso: int, operacion: str) -> str:
@@ -510,27 +509,59 @@ class OperacionesVectoriales:
 class Matriz:
     def __init__(self, filas: List[List[float]]):
         self.filas = [fila[:] for fila in filas]
-        self.m = len(filas)  # número de filas
-        self.n = len(filas[0]) if filas else 0  # número de columnas
+        self.m = len(filas)
+        self.n = len(filas[0]) if filas else 0
     
     def __str__(self) -> str:
         return "\n".join("  ".join(f"{x:8.4f}" for x in fila) for fila in self.filas)
     
-    def __mul__(self, other):
-        """Multiplicación de matrices A * B"""
-        if self.n != other.m:
-            raise ValueError(f"No se pueden multiplicar matrices {self.m}×{self.n} y {other.m}×{other.n}")
+    def __add__(self, other: 'Matriz') -> 'Matriz':
+        if self.m != other.m or self.n != other.n:
+            raise ValueError(f"Las matrices deben tener las mismas dimensiones para sumar ({self.m}×{self.n} y {other.m}×{other.n})")
         
         resultado = []
         for i in range(self.m):
-            fila = []
-            for j in range(other.n):
-                suma = 0
-                for k in range(self.n):
-                    suma += self.filas[i][k] * other.filas[k][j]
-                fila.append(suma)
+            fila = [self.filas[i][j] + other.filas[i][j] for j in range(self.n)]
             resultado.append(fila)
+        return Matriz(resultado)
+
+    def __sub__(self, other: 'Matriz') -> 'Matriz':
+        if self.m != other.m or self.n != other.n:
+            raise ValueError(f"Las matrices deben tener las mismas dimensiones para restar ({self.m}×{self.n} y {other.m}×{other.n})")
         
+        resultado = []
+        for i in range(self.m):
+            fila = [self.filas[i][j] - other.filas[i][j] for j in range(self.n)]
+            resultado.append(fila)
+        return Matriz(resultado)
+
+    def __mul__(self, other):
+        if isinstance(other, (int, float)):
+            resultado = [[elem * other for elem in fila] for fila in self.filas]
+            return Matriz(resultado)
+        
+        if isinstance(other, Matriz):
+            if self.n != other.m:
+                raise ValueError(f"No se pueden multiplicar matrices {self.m}×{self.n} y {other.m}×{other.n}")
+            
+            resultado = []
+            for i in range(self.m):
+                fila = []
+                for j in range(other.n):
+                    suma = sum(self.filas[i][k] * other.filas[k][j] for k in range(self.n))
+                    fila.append(suma)
+                resultado.append(fila)
+            return Matriz(resultado)
+        
+        raise TypeError(f"La multiplicación no está definida para Matriz y {type(other)}")
+
+    def __rmul__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__mul__(other)
+        raise TypeError(f"La multiplicación no está definida para {type(other)} y Matriz")
+
+    def transpuesta(self) -> 'Matriz':
+        resultado = [[self.filas[j][i] for j in range(self.m)] for i in range(self.n)]
         return Matriz(resultado)
     
     def es_cuadrada(self) -> bool:
@@ -556,20 +587,16 @@ class OperacionesMatriciales:
         resultado += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
         resultado += f"Matriz B ({matriz_b.m}×{matriz_b.n}):\n{matriz_b}\n\n"
         
-        # Verificar dimensiones
         if matriz_a.n != matriz_b.m:
-            return resultado + f"Error: No se puede resolver AX = B.\n"
-            + f"El número de columnas de A ({matriz_a.n}) debe ser igual al número de filas de B ({matriz_b.m}).\n"
+            return resultado + f"Error: No se puede resolver AX = B.\n" + f"El número de columnas de A ({matriz_a.n}) debe ser igual al número de filas de B ({matriz_b.m}).\n"
         
         resultado += "Planteo del sistema:\n"
         resultado += "Para cada columna j de B, resolver Axⱼ = bⱼ\n\n"
         
-        # Resolver para cada columna de B
         soluciones = []
         for j in range(matriz_b.n):
             resultado += f"--- Columna {j+1} de B ---\n"
             
-            # Construir sistema Ax = b para la columna j
             matriz_aumentada = []
             for i in range(matriz_a.m):
                 fila = matriz_a.filas[i][:] + [matriz_b.filas[i][j]]
@@ -580,7 +607,6 @@ class OperacionesMatriciales:
                 resultado += f"Fila {i+1}: {'  '.join(f'{x:8.4f}' for x in fila)}\n"
             resultado += "\n"
             
-            # Resolver usando eliminación gaussiana
             sistema = SistemaLineal(matriz_aumentada)
             resultado += sistema.eliminacion_gaussiana()
             resultado += "\n" + "="*50 + "\n\n"
@@ -598,7 +624,6 @@ class OperacionesMatriciales:
             producto = matriz_a * matriz_b
             resultado += f"Resultado A * B ({producto.m}×{producto.n}):\n{producto}\n\n"
             
-            # Mostrar el procedimiento paso a paso
             resultado += "Procedimiento paso a paso:\n"
             for i in range(producto.m):
                 for j in range(producto.n):
@@ -606,11 +631,95 @@ class OperacionesMatriciales:
                     for k in range(matriz_a.n):
                         terminos.append(f"({matriz_a.filas[i][k]:.4f} × {matriz_b.filas[k][j]:.4f})")
                     resultado += f"C[{i+1},{j+1}] = {' + '.join(terminos)} = {producto.filas[i][j]:.4f}\n"
-            
+        
         except ValueError as e:
             resultado += f"Error: {e}\n"
         
         return resultado
+
+    @staticmethod
+    def suma_matrices(matriz_a: Matriz, matriz_b: Matriz) -> str:
+        resultado_str = "=== Suma de Matrices A + B ===\n\n"
+        resultado_str += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
+        resultado_str += f"Matriz B ({matriz_b.m}×{matriz_b.n}):\n{matriz_b}\n\n"
+        
+        try:
+            suma = matriz_a + matriz_b
+            resultado_str += f"Resultado A + B ({suma.m}×{suma.n}):\n{suma}\n\n"
+            
+            resultado_str += "Procedimiento paso a paso (C[i,j] = A[i,j] + B[i,j]):\n"
+            for i in range(suma.m):
+                for j in range(suma.n):
+                    a_val = matriz_a.filas[i][j]
+                    b_val = matriz_b.filas[i][j]
+                    c_val = suma.filas[i][j]
+                    resultado_str += f"C[{i+1},{j+1}] = {a_val:.4f} + {b_val:.4f} = {c_val:.4f}\n"
+
+        except ValueError as e:
+            resultado_str += f"Error: {e}\n"
+        
+        return resultado_str
+
+    @staticmethod
+    def resta_matrices(matriz_a: Matriz, matriz_b: Matriz) -> str:
+        resultado_str = "=== Resta de Matrices A - B ===\n\n"
+        resultado_str += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
+        resultado_str += f"Matriz B ({matriz_b.m}×{matriz_b.n}):\n{matriz_b}\n\n"
+        
+        try:
+            resta = matriz_a - matriz_b
+            resultado_str += f"Resultado A - B ({resta.m}×{resta.n}):\n{resta}\n\n"
+
+            resultado_str += "Procedimiento paso a paso (C[i,j] = A[i,j] - B[i,j]):\n"
+            for i in range(resta.m):
+                for j in range(resta.n):
+                    a_val = matriz_a.filas[i][j]
+                    b_val = matriz_b.filas[i][j]
+                    c_val = resta.filas[i][j]
+                    resultado_str += f"C[{i+1},{j+1}] = {a_val:.4f} - {b_val:.4f} = {c_val:.4f}\n"
+
+        except ValueError as e:
+            resultado_str += f"Error: {e}\n"
+        
+        return resultado_str
+
+    @staticmethod
+    def multiplicacion_por_escalar(matriz_a: Matriz, escalar: float) -> str:
+        resultado_str = f"=== Multiplicación de Matriz por Escalar ({escalar:.4f}) * A ===\n\n"
+        resultado_str += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
+        
+        producto = matriz_a * escalar
+        resultado_str += f"Resultado ({escalar:.4f}) * A ({producto.m}×{producto.n}):\n{producto}\n\n"
+        
+        resultado_str += f"Procedimiento paso a paso (C[i,j] = {escalar:.4f} * A[i,j]):\n"
+        for i in range(producto.m):
+            for j in range(producto.n):
+                a_val = matriz_a.filas[i][j]
+                c_val = producto.filas[i][j]
+                resultado_str += f"C[{i+1},{j+1}] = {escalar:.4f} * {a_val:.4f} = {c_val:.4f}\n"
+        
+        return resultado_str
+
+    @staticmethod
+    def matriz_traspuesta(matriz_a: Matriz) -> str:
+        resultado_str = "=== Matriz Traspuesta A^T ===\n\n"
+        resultado_str += f"Matriz Original A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
+        
+        traspuesta = matriz_a.transpuesta()
+        resultado_str += f"Matriz Traspuesta A^T ({traspuesta.m}×{traspuesta.n}):\n{traspuesta}\n\n"
+        
+        resultado_str += "Procedimiento (A^T[i,j] = A[j,i]):\n"
+        resultado_str += "Se intercambian las filas por las columnas.\n"
+        for i in range(traspuesta.m):
+             resultado_str += f"Nueva Fila {i+1} = Antigua Columna {i+1}\n"
+        
+        resultado_str += "\nPropiedades básicas:\n"
+        resultado_str += "1. (A^T)^T = A\n"
+        resultado_str += "2. (A + B)^T = A^T + B^T\n"
+        resultado_str += "3. (kA)^T = k(A^T)\n"
+        resultado_str += "4. (AB)^T = B^T * A^T\n"
+
+        return resultado_str
 
 # ============================
 # Interfaz (Tkinter)
@@ -629,7 +738,6 @@ class AlgebraLinealGUI(ttk.Frame):
         self._build_notebook()
         self._bind_shortcuts()
 
-        # Estado inicial
         self._status("Listo.")
 
     # ---------- Estilos y menús ----------
@@ -684,25 +792,17 @@ class AlgebraLinealGUI(ttk.Frame):
         self.status.pack(side=tk.RIGHT)
 
     def _build_notebook(self):
-        # Crear notebook con pestañas
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=12, pady=6)
         
-        # Pestaña 1: Sistemas Lineales (matrices)
         self._build_matrices_tab()
-        
-        # Pestaña 2: Vectores
         self._build_vectores_tab()
-        
-        # Pestaña 3: Matrices
         self._build_matrices_operations_tab()
     
     def _build_matrices_tab(self):
-        # Frame para la pestaña de matrices
         matrices_frame = ttk.Frame(self.notebook)
         self.notebook.add(matrices_frame, text="Sistemas Lineales")
         
-        # Panel de configuración
         card_cfg = ttk.Frame(matrices_frame, style="Card.TFrame")
         card_cfg.pack(fill=tk.X, padx=10, pady=(10, 8))
         cfg = ttk.Frame(card_cfg)
@@ -725,7 +825,6 @@ class AlgebraLinealGUI(ttk.Frame):
         ttk.Button(cfg, text="Resolver", command=self._solve).grid(row=0, column=6, padx=8)
         ttk.Button(cfg, text="Limpiar", command=self._clear_all).grid(row=0, column=7)
 
-        # Panel de matriz
         card_mat = ttk.Frame(matrices_frame, style="Card.TFrame")
         card_mat.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0,8))
         mat = ttk.Frame(card_mat)
@@ -743,7 +842,6 @@ class AlgebraLinealGUI(ttk.Frame):
         self.grid_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind("<Configure>", self._on_canvas_resize)
 
-        # Panel de resultados
         card_out = ttk.Frame(matrices_frame, style="Card.TFrame")
         card_out.pack(fill=tk.BOTH, expand=True, padx=10)
         out = ttk.Frame(card_out)
@@ -760,13 +858,11 @@ class AlgebraLinealGUI(ttk.Frame):
         ttk.Button(btns, text="Copiar resultado", command=self._copy_output).pack(side=tk.LEFT)
         ttk.Button(btns, text="Exportar pasos…", command=self._export).pack(side=tk.LEFT, padx=(8,0))
         
-        # Estado inicial para matrices
         self.var_m.set(3)
         self.var_n.set(3)
         self._render_grid(3, 3)
 
     def _check_linear_independence(self):
-        """Verifica si el conjunto de vectores es linealmente independiente o dependiente."""
         try:
             vectores = self._read_vectors()
             resultado = OperacionesVectoriales.dependencia_independencia(vectores)
@@ -779,11 +875,9 @@ class AlgebraLinealGUI(ttk.Frame):
     
     
     def _build_vectores_tab(self):
-        # Frame para la pestaña de vectores
         vectores_frame = ttk.Frame(self.notebook)
         self.notebook.add(vectores_frame, text="Vectores")
         
-        # Panel de configuración de vectores
         card_cfg = ttk.Frame(vectores_frame, style="Card.TFrame")
         card_cfg.pack(fill=tk.X, padx=10, pady=(10, 8))
         cfg = ttk.Frame(card_cfg)
@@ -805,7 +899,6 @@ class AlgebraLinealGUI(ttk.Frame):
         ttk.Button(cfg, text="Resolver", command=self._solve_vectors).grid(row=0, column=6, padx=8)
         ttk.Button(cfg, text="Limpiar", command=self._clear_vectors).grid(row=0, column=7, padx=(8,0))
         
-        # Panel de operaciones
         card_ops = ttk.Frame(vectores_frame, style="Card.TFrame")
         card_ops.pack(fill=tk.X, padx=10, pady=(0,8))
         ops = ttk.Frame(card_ops)
@@ -822,7 +915,6 @@ class AlgebraLinealGUI(ttk.Frame):
         ttk.Button(ops_buttons, text="Independencia lineal", command=self._check_linear_independence).pack(side=tk.LEFT, padx=(0,8))
 
         
-        # Panel de entrada de vectores
         card_input = ttk.Frame(vectores_frame, style="Card.TFrame")
         card_input.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0,8))
         input_frame = ttk.Frame(card_input)
@@ -830,7 +922,6 @@ class AlgebraLinealGUI(ttk.Frame):
         
         ttk.Label(input_frame, text="Ingreso de vectores", style="Header.TLabel").pack(anchor="w", pady=(0,6))
         
-        # Canvas para vectores
         self.vector_canvas = tk.Canvas(input_frame, highlightthickness=0)
         self.vector_frame = ttk.Frame(self.vector_canvas)
         self.vector_scroll_y = ttk.Scrollbar(input_frame, orient="vertical", command=self.vector_canvas.yview)
@@ -841,7 +932,6 @@ class AlgebraLinealGUI(ttk.Frame):
         self.vector_frame.bind("<Configure>", lambda e: self.vector_canvas.configure(scrollregion=self.vector_canvas.bbox("all")))
         self.vector_canvas.bind("<Configure>", self._on_vector_canvas_resize)
         
-        # Panel de resultados para vectores
         card_out_vec = ttk.Frame(vectores_frame, style="Card.TFrame")
         card_out_vec.pack(fill=tk.BOTH, expand=True, padx=10)
         out_vec = ttk.Frame(card_out_vec)
@@ -858,17 +948,14 @@ class AlgebraLinealGUI(ttk.Frame):
         ttk.Button(btns_vec, text="Copiar resultado", command=self._copy_vector_output).pack(side=tk.LEFT)
         ttk.Button(btns_vec, text="Exportar pasos…", command=self._export_vector_output).pack(side=tk.LEFT, padx=(8,0))
         
-        # Estado inicial para vectores
         self.var_dimension.set(3)
         self.var_num_vectores.set(3)
         self._render_vector_grid(3, 3)
     
     def _build_matrices_operations_tab(self):
-        # Frame para la pestaña de operaciones con matrices
         matrices_ops_frame = ttk.Frame(self.notebook)
         self.notebook.add(matrices_ops_frame, text="Matrices")
         
-        # Panel de configuración
         card_cfg = ttk.Frame(matrices_ops_frame, style="Card.TFrame")
         card_cfg.pack(fill=tk.X, padx=10, pady=(10, 8))
         cfg = ttk.Frame(card_cfg)
@@ -900,7 +987,6 @@ class AlgebraLinealGUI(ttk.Frame):
         ttk.Button(cfg, text="Resolver", command=self._solve_matrices).grid(row=0, column=7, padx=8)
         ttk.Button(cfg, text="Limpiar", command=self._clear_matrices).grid(row=0, column=8, padx=(8,0))
         
-        # Panel de operaciones
         card_ops = ttk.Frame(matrices_ops_frame, style="Card.TFrame")
         card_ops.pack(fill=tk.X, padx=10, pady=(0,8))
         ops = ttk.Frame(card_ops)
@@ -913,8 +999,11 @@ class AlgebraLinealGUI(ttk.Frame):
         
         ttk.Button(ops_buttons, text="Ecuación AX=B", command=self._matrix_equation).pack(side=tk.LEFT, padx=(0,8))
         ttk.Button(ops_buttons, text="Multiplicar A*B", command=self._multiply_matrices).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(ops_buttons, text="Sumar A+B", command=self._sum_matrices).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(ops_buttons, text="Restar A-B", command=self._subtract_matrices).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(ops_buttons, text="A * escalar", command=self._multiply_by_scalar).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(ops_buttons, text="Transpuesta de A", command=self._transpose_matrix).pack(side=tk.LEFT, padx=(0,8))
         
-        # Panel de entrada de matrices
         card_input = ttk.Frame(matrices_ops_frame, style="Card.TFrame")
         card_input.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0,8))
         input_frame = ttk.Frame(card_input)
@@ -922,7 +1011,6 @@ class AlgebraLinealGUI(ttk.Frame):
         
         ttk.Label(input_frame, text="Ingreso de matrices", style="Header.TLabel").pack(anchor="w", pady=(0,6))
         
-        # Canvas para matrices
         self.matrix_canvas = tk.Canvas(input_frame, highlightthickness=0)
         self.matrix_frame = ttk.Frame(self.matrix_canvas)
         self.matrix_scroll_y = ttk.Scrollbar(input_frame, orient="vertical", command=self.matrix_canvas.yview)
@@ -933,7 +1021,6 @@ class AlgebraLinealGUI(ttk.Frame):
         self.matrix_frame.bind("<Configure>", lambda e: self.matrix_canvas.configure(scrollregion=self.matrix_canvas.bbox("all")))
         self.matrix_canvas.bind("<Configure>", self._on_matrix_canvas_resize)
         
-        # Panel de resultados para matrices
         card_out_mat = ttk.Frame(matrices_ops_frame, style="Card.TFrame")
         card_out_mat.pack(fill=tk.BOTH, expand=True, padx=10)
         out_mat = ttk.Frame(card_out_mat)
@@ -950,7 +1037,6 @@ class AlgebraLinealGUI(ttk.Frame):
         ttk.Button(btns_mat, text="Copiar resultado", command=self._copy_matrix_output).pack(side=tk.LEFT)
         ttk.Button(btns_mat, text="Exportar pasos…", command=self._export_matrix_output).pack(side=tk.LEFT, padx=(8,0))
         
-        # Estado inicial para matrices
         self.var_mat_a_m.set(3)
         self.var_mat_a_n.set(3)
         self.var_mat_b_m.set(3)
@@ -985,12 +1071,10 @@ class AlgebraLinealGUI(ttk.Frame):
             child.destroy()
         self.entries: List[List[ttk.Entry]] = []
 
-        # Encabezados
         for j in range(n):
             ttk.Label(self.grid_frame, text=f"x{j+1}").grid(row=0, column=j, padx=4, pady=4)
         ttk.Label(self.grid_frame, text="| b").grid(row=0, column=n, padx=4, pady=4)
 
-        # Celdas
         vcmd_num = (self.register(self._validate_number), "%P")
         for i in range(m):
             fila_entries: List[ttk.Entry] = []
@@ -1009,7 +1093,6 @@ class AlgebraLinealGUI(ttk.Frame):
     def _validate_number(self, new_value: str) -> bool:
         if new_value == "" or new_value == "-" or new_value == ".":
             return True
-        # permitir decimales con "," o "."
         try:
             float(new_value.replace(",", "."))
             return True
@@ -1109,16 +1192,13 @@ class AlgebraLinealGUI(ttk.Frame):
     
     # ---------- Métodos para vectores ----------
     def _render_vector_grid(self, dimension: int, num_vectores: int):
-        """Renderiza el grid para entrada de vectores"""
         for child in self.vector_frame.winfo_children():
             child.destroy()
         self.vector_entries: List[List[ttk.Entry]] = []
         
-        # Encabezados
         for j in range(dimension):
             ttk.Label(self.vector_frame, text=f"x{j+1}").grid(row=0, column=j+1, padx=4, pady=4)
         
-        # Vectores
         vcmd_num = (self.register(self._validate_number), "%P")
         for i in range(num_vectores):
             ttk.Label(self.vector_frame, text=f"v{i+1}").grid(row=i+1, column=0, padx=4, pady=4)
@@ -1134,14 +1214,12 @@ class AlgebraLinealGUI(ttk.Frame):
             self.vector_frame.columnconfigure(j, weight=1)
     
     def _apply_vector_size(self):
-        """Aplica el nuevo tamaño para vectores"""
         dim = max(2, int(self.var_dimension.get() or 2))
         num = max(1, int(self.var_num_vectores.get() or 1))
         self._render_vector_grid(dim, num)
         self._status(f"Vectores {num}×{dim} creados.")
     
     def _read_vectors(self) -> List[Vector]:
-        """Lee los vectores ingresados"""
         vectores = []
         dim = int(self.var_dimension.get())
         num = int(self.var_num_vectores.get())
@@ -1158,7 +1236,6 @@ class AlgebraLinealGUI(ttk.Frame):
         return vectores
     
     def _verify_properties(self):
-        """Verifica las propiedades del espacio vectorial"""
         try:
             vectores = self._read_vectors()
             resultado = OperacionesVectoriales.verificar_propiedades_espacio_vectorial(vectores)
@@ -1170,14 +1247,12 @@ class AlgebraLinealGUI(ttk.Frame):
             self._status("Error en verificación de propiedades.")
     
     def _linear_combination(self):
-        """Resuelve combinación lineal"""
         try:
             vectores = self._read_vectors()
             if len(vectores) < 2:
                 messagebox.showwarning("Advertencia", "Se necesitan al menos 2 vectores para combinación lineal.")
                 return
             
-            # Pedir vector objetivo
             dim = vectores[0].dimension
             vector_objetivo = self._get_vector_objetivo(dim)
             if vector_objetivo is None:
@@ -1192,14 +1267,12 @@ class AlgebraLinealGUI(ttk.Frame):
             self._status("Error en combinación lineal.")
     
     def _vector_equation(self):
-        """Resuelve ecuación vectorial"""
         try:
             vectores = self._read_vectors()
             if len(vectores) < 2:
                 messagebox.showwarning("Advertencia", "Se necesitan al menos 2 vectores para ecuación vectorial.")
                 return
             
-            # Pedir vector objetivo
             dim = vectores[0].dimension
             vector_objetivo = self._get_vector_objetivo(dim)
             if vector_objetivo is None:
@@ -1214,7 +1287,6 @@ class AlgebraLinealGUI(ttk.Frame):
             self._status("Error en ecuación vectorial.")
     
     def _get_vector_objetivo(self, dimension: int) -> Vector:
-        """Solicita al usuario el vector objetivo"""
         dialog = tk.Toplevel(self.master)
         dialog.title("Vector objetivo")
         dialog.geometry("400x200")
@@ -1261,7 +1333,6 @@ class AlgebraLinealGUI(ttk.Frame):
         return resultado[0]
     
     def _load_vector_example(self):
-        """Carga un ejemplo de vectores"""
         self._render_vector_grid(3, 3)
         datos = [
             [1, 2, 3],
@@ -1276,7 +1347,6 @@ class AlgebraLinealGUI(ttk.Frame):
         self._status("Ejemplo de vectores cargado (3×3).")
     
     def _clear_vectors(self):
-        """Limpia todos los campos de vectores"""
         for fila in getattr(self, 'vector_entries', []):
             for e in fila:
                 e.delete(0, tk.END)
@@ -1285,7 +1355,6 @@ class AlgebraLinealGUI(ttk.Frame):
         self._status("Campos de vectores limpiados.")
     
     def _copy_vector_output(self):
-        """Copia el resultado de vectores al portapapeles"""
         contenido = self.txt_vectores.get("1.0", tk.END)
         if not contenido.strip():
             messagebox.showinfo("Copiar", "No hay contenido para copiar.")
@@ -1295,7 +1364,6 @@ class AlgebraLinealGUI(ttk.Frame):
         self._status("Resultado de vectores copiado.")
     
     def _export_vector_output(self):
-        """Exporta el resultado de vectores a archivo"""
         contenido = self.txt_vectores.get("1.0", tk.END).strip()
         if not contenido:
             messagebox.showinfo("Exportar", "No hay contenido para exportar.")
@@ -1316,25 +1384,20 @@ class AlgebraLinealGUI(ttk.Frame):
                 messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
     
     def _solve_vectors(self):
-        """Método resolver para vectores - ejecuta verificación de propiedades por defecto"""
         self._verify_properties()
     
     # ---------- Métodos para matrices ----------
     def _render_matrix_grid(self, ma: int, na: int, mb: int, nb: int):
-        """Renderiza el grid para entrada de matrices A y B"""
         for child in self.matrix_frame.winfo_children():
             child.destroy()
         self.matrix_a_entries: List[List[ttk.Entry]] = []
         self.matrix_b_entries: List[List[ttk.Entry]] = []
         
-        # Matriz A
         ttk.Label(self.matrix_frame, text="Matriz A", style="Header.TLabel").grid(row=0, column=0, columnspan=na, pady=(0,10))
         
-        # Encabezados matriz A
         for j in range(na):
             ttk.Label(self.matrix_frame, text=f"Col {j+1}").grid(row=1, column=j+1, padx=4, pady=4)
         
-        # Filas matriz A
         vcmd_num = (self.register(self._validate_number), "%P")
         for i in range(ma):
             ttk.Label(self.matrix_frame, text=f"Fila {i+1}").grid(row=i+2, column=0, padx=4, pady=4)
@@ -1346,17 +1409,13 @@ class AlgebraLinealGUI(ttk.Frame):
                 fila_entries.append(e)
             self.matrix_a_entries.append(fila_entries)
         
-        # Separador
         ttk.Separator(self.matrix_frame, orient="horizontal").grid(row=ma+2, column=0, columnspan=na+1, sticky="ew", pady=20)
         
-        # Matriz B
         ttk.Label(self.matrix_frame, text="Matriz B", style="Header.TLabel").grid(row=ma+3, column=0, columnspan=nb, pady=(0,10))
         
-        # Encabezados matriz B
         for j in range(nb):
             ttk.Label(self.matrix_frame, text=f"Col {j+1}").grid(row=ma+4, column=j+1, padx=4, pady=4)
         
-        # Filas matriz B
         for i in range(mb):
             ttk.Label(self.matrix_frame, text=f"Fila {i+1}").grid(row=ma+5+i, column=0, padx=4, pady=4)
             fila_entries: List[ttk.Entry] = []
@@ -1371,7 +1430,6 @@ class AlgebraLinealGUI(ttk.Frame):
             self.matrix_frame.columnconfigure(j, weight=1)
     
     def _apply_matrix_size(self):
-        """Aplica el nuevo tamaño para matrices"""
         ma = max(1, int(self.var_mat_a_m.get() or 1))
         na = max(1, int(self.var_mat_a_n.get() or 1))
         mb = max(1, int(self.var_mat_b_m.get() or 1))
@@ -1380,13 +1438,11 @@ class AlgebraLinealGUI(ttk.Frame):
         self._status(f"Matrices A({ma}×{na}) y B({mb}×{nb}) creadas.")
     
     def _read_matrices(self) -> tuple[Matriz, Matriz]:
-        """Lee las matrices A y B ingresadas"""
         ma = int(self.var_mat_a_m.get())
         na = int(self.var_mat_a_n.get())
         mb = int(self.var_mat_b_m.get())
         nb = int(self.var_mat_b_n.get())
         
-        # Leer matriz A
         filas_a = []
         for i in range(ma):
             fila = []
@@ -1397,7 +1453,6 @@ class AlgebraLinealGUI(ttk.Frame):
                 fila.append(float(val))
             filas_a.append(fila)
         
-        # Leer matriz B
         filas_b = []
         for i in range(mb):
             fila = []
@@ -1411,7 +1466,6 @@ class AlgebraLinealGUI(ttk.Frame):
         return Matriz(filas_a), Matriz(filas_b)
     
     def _matrix_equation(self):
-        """Resuelve la ecuación matricial AX = B"""
         try:
             matriz_a, matriz_b = self._read_matrices()
             resultado = OperacionesMatriciales.ecuacion_matricial(matriz_a, matriz_b)
@@ -1423,7 +1477,6 @@ class AlgebraLinealGUI(ttk.Frame):
             self._status("Error en ecuación matricial.")
     
     def _multiply_matrices(self):
-        """Multiplica las matrices A * B"""
         try:
             matriz_a, matriz_b = self._read_matrices()
             resultado = OperacionesMatriciales.multiplicacion_matrices(matriz_a, matriz_b)
@@ -1433,16 +1486,61 @@ class AlgebraLinealGUI(ttk.Frame):
         except Exception as e:
             messagebox.showerror("Error", str(e))
             self._status("Error en multiplicación de matrices.")
-    
+
+    def _sum_matrices(self):
+        try:
+            matriz_a, matriz_b = self._read_matrices()
+            resultado = OperacionesMatriciales.suma_matrices(matriz_a, matriz_b)
+            self.txt_matrices.delete("1.0", tk.END)
+            self.txt_matrices.insert(tk.END, resultado)
+            self._status("Suma de matrices completada.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en la suma de matrices.")
+
+    def _subtract_matrices(self):
+        try:
+            matriz_a, matriz_b = self._read_matrices()
+            resultado = OperacionesMatriciales.resta_matrices(matriz_a, matriz_b)
+            self.txt_matrices.delete("1.0", tk.END)
+            self.txt_matrices.insert(tk.END, resultado)
+            self._status("Resta de matrices completada.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en la resta de matrices.")
+
+    def _multiply_by_scalar(self):
+        try:
+            escalar = simpledialog.askfloat("Entrada de escalar", "Ingrese el valor del escalar:", parent=self.master)
+            if escalar is None:
+                return
+
+            matriz_a, _ = self._read_matrices()
+            resultado = OperacionesMatriciales.multiplicacion_por_escalar(matriz_a, escalar)
+            self.txt_matrices.delete("1.0", tk.END)
+            self.txt_matrices.insert(tk.END, resultado)
+            self._status("Multiplicación por escalar completada.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en la multiplicación por escalar.")
+
+    def _transpose_matrix(self):
+        try:
+            matriz_a, _ = self._read_matrices()
+            resultado = OperacionesMatriciales.matriz_traspuesta(matriz_a)
+            self.txt_matrices.delete("1.0", tk.END)
+            self.txt_matrices.insert(tk.END, resultado)
+            self._status("Cálculo de la traspuesta completado.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en el cálculo de la traspuesta.")
+
     def _solve_matrices(self):
-        """Método resolver para matrices - ejecuta ecuación AX=B por defecto"""
         self._matrix_equation()
     
     def _load_matrix_example(self):
-        """Carga un ejemplo de matrices"""
         self._render_matrix_grid(3, 3, 3, 2)
         
-        # Matriz A 3x3
         datos_a = [
             [1, 2, 3],
             [2, 1, 1],
@@ -1454,7 +1552,6 @@ class AlgebraLinealGUI(ttk.Frame):
                 e.delete(0, tk.END)
                 e.insert(0, str(datos_a[i][j]))
         
-        # Matriz B 3x2
         datos_b = [
             [1, 2],
             [3, 4],
@@ -1469,7 +1566,6 @@ class AlgebraLinealGUI(ttk.Frame):
         self._status("Ejemplo de matrices cargado (A: 3×3, B: 3×2).")
     
     def _clear_matrices(self):
-        """Limpia todos los campos de matrices"""
         for fila in getattr(self, 'matrix_a_entries', []):
             for e in fila:
                 e.delete(0, tk.END)
@@ -1482,7 +1578,6 @@ class AlgebraLinealGUI(ttk.Frame):
         self._status("Campos de matrices limpiados.")
     
     def _copy_matrix_output(self):
-        """Copia el resultado de matrices al portapapeles"""
         contenido = self.txt_matrices.get("1.0", tk.END)
         if not contenido.strip():
             messagebox.showinfo("Copiar", "No hay contenido para copiar.")
@@ -1492,7 +1587,6 @@ class AlgebraLinealGUI(ttk.Frame):
         self._status("Resultado de matrices copiado.")
     
     def _export_matrix_output(self):
-        """Exporta el resultado de matrices a archivo"""
         contenido = self.txt_matrices.get("1.0", tk.END).strip()
         if not contenido:
             messagebox.showinfo("Exportar", "No hay contenido para exportar.")
