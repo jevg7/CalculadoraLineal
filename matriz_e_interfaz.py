@@ -702,24 +702,74 @@ class OperacionesMatriciales:
 
     @staticmethod
     def matriz_traspuesta(matriz_a: Matriz) -> str:
-        resultado_str = "=== Matriz Traspuesta A^T ===\n\n"
+        resultado_str = "=== Matriz Traspuesta Aᵀ ===\n\n"
         resultado_str += f"Matriz Original A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
         
         traspuesta = matriz_a.transpuesta()
-        resultado_str += f"Matriz Traspuesta A^T ({traspuesta.m}×{traspuesta.n}):\n{traspuesta}\n\n"
+        resultado_str += f"Matriz Traspuesta Aᵀ ({traspuesta.m}×{traspuesta.n}):\n{traspuesta}\n\n"
         
-        resultado_str += "Procedimiento (A^T[i,j] = A[j,i]):\n"
+        resultado_str += "Procedimiento (Aᵀ[i,j] = A[j,i]):\n"
         resultado_str += "Se intercambian las filas por las columnas.\n"
         for i in range(traspuesta.m):
              resultado_str += f"Nueva Fila {i+1} = Antigua Columna {i+1}\n"
         
-        resultado_str += "\nPropiedades básicas:\n"
-        resultado_str += "1. (A^T)^T = A\n"
-        resultado_str += "2. (A + B)^T = A^T + B^T\n"
-        resultado_str += "3. (kA)^T = k(A^T)\n"
-        resultado_str += "4. (AB)^T = B^T * A^T\n"
+        resultado_str += "\nPropiedades teóricas (para referencia):\n"
+        resultado_str += "1. (Aᵀ)ᵀ = A\n"
+        resultado_str += "2. (A + B)ᵀ = Aᵀ + Bᵀ\n"
+        resultado_str += "3. (kA)ᵀ = k(Aᵀ)\n"
+        resultado_str += "4. (AB)ᵀ = Bᵀ * Aᵀ\n"
 
         return resultado_str
+
+    @staticmethod
+    def verificar_propiedad_suma_traspuesta(matriz_a: Matriz, matriz_b: Matriz) -> str:
+        """Verifica la propiedad (A+B)^T = A^T + B^T"""
+        resultado = "=== Verificación de Propiedad: (A+B)ᵀ = Aᵀ + Bᵀ ===\n\n"
+        resultado += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
+        resultado += f"Matriz B ({matriz_b.m}×{matriz_b.n}):\n{matriz_b}\n\n"
+
+        try:
+            # Lado Izquierdo: (A + B)ᵀ 
+            resultado += "--- Cálculo del Lado Izquierdo: (A + B)ᵀ ---\n"
+            # 1. Sumar A + B
+            suma_ab = matriz_a + matriz_b
+            resultado += f"1. Calcular A + B:\n{suma_ab}\n\n"
+            # 2. Transponer el resultado
+            lhs = suma_ab.transpuesta()
+            resultado += f"2. Transponer el resultado (A + B)ᵀ:\n{lhs}\n\n"
+
+            #Lado Derecho: Aᵀ + Bᵀ
+            resultado += "--- Cálculo del Lado Derecho: Aᵀ + Bᵀ ---\n"
+            # 1. Transponer A
+            a_t = matriz_a.transpuesta()
+            resultado += f"1. Calcular Aᵀ:\n{a_t}\n\n"
+            # 2. Transponer B
+            b_t = matriz_b.transpuesta()
+            resultado += f"2. Calcular Bᵀ:\n{b_t}\n\n"
+            # 3. Sumar las transpuestas
+            rhs = a_t + b_t
+            resultado += f"3. Sumar Aᵀ + Bᵀ:\n{rhs}\n\n"
+
+            # Conclusión
+            resultado += "--- Conclusión ---\n"
+            resultado += f"Lado Izquierdo:\n{lhs}\n\n"
+            resultado += f"Lado Derecho:\n{rhs}\n\n"
+            
+            # Comparar matrices (elemento por elemento)
+            son_iguales = all(
+                all(abs(lhs.filas[i][j] - rhs.filas[i][j]) < 1e-10 for j in range(lhs.n))
+                for i in range(lhs.m)
+            )
+
+            if son_iguales:
+                resultado += "✓ Los resultados son iguales. La propiedad (A+B)ᵀ = Aᵀ + Bᵀ se cumple.\n"
+            else:
+                resultado += "✗ Los resultados NO son iguales. La propiedad no se cumple (revisar cálculo).\n"
+
+        except ValueError as e:
+            resultado += f"Error: No se puede verificar la propiedad.\n{e}\n"
+        
+        return resultado
 
 # ============================
 # Interfaz (Tkinter)
@@ -1003,6 +1053,7 @@ class AlgebraLinealGUI(ttk.Frame):
         ttk.Button(ops_buttons, text="Restar A-B", command=self._subtract_matrices).pack(side=tk.LEFT, padx=(0,8))
         ttk.Button(ops_buttons, text="A * escalar", command=self._multiply_by_scalar).pack(side=tk.LEFT, padx=(0,8))
         ttk.Button(ops_buttons, text="Transpuesta de A", command=self._transpose_matrix).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(ops_buttons, text="Verificar (A+B)ᵀ", command=self._verify_transpose_sum_property).pack(side=tk.LEFT, padx=(0,8))
         
         card_input = ttk.Frame(matrices_ops_frame, style="Card.TFrame")
         card_input.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0,8))
@@ -1534,6 +1585,18 @@ class AlgebraLinealGUI(ttk.Frame):
         except Exception as e:
             messagebox.showerror("Error", str(e))
             self._status("Error en el cálculo de la traspuesta.")
+
+    def _verify_transpose_sum_property(self):
+        """Verifica la propiedad (A+B)^T = A^T + B^T"""
+        try:
+            matriz_a, matriz_b = self._read_matrices()
+            resultado = OperacionesMatriciales.verificar_propiedad_suma_traspuesta(matriz_a, matriz_b)
+            self.txt_matrices.delete("1.0", tk.END)
+            self.txt_matrices.insert(tk.END, resultado)
+            self._status("Verificación de propiedad completada.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error durante la verificación.")
 
     def _solve_matrices(self):
         self._matrix_equation()
