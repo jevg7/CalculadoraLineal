@@ -909,6 +909,321 @@ class OperacionesMatriciales:
     # === FIN: CÓDIGO AÑADIDO PARA LA TAREA 6 ===
     # ==================================================
 
+    # ==================================================
+    # === INICIO: CÓDIGO AÑADIDO PARA LA TAREA 7 ===
+    # ==================================================
+
+    @staticmethod
+    def _submatriz(matriz: List[List[float]], i: int, j: int) -> List[List[float]]:
+        """Obtiene la submatriz eliminando la fila i y columna j (0-indexed)."""
+        return [[matriz[r][c] for c in range(len(matriz[0])) if c != j]
+                 for r in range(len(matriz)) if r != i]
+
+    @staticmethod
+    def determinante_sarrus(matriz_a: Matriz) -> str:
+        """Calcula el determinante de una matriz 3×3 usando la Regla de Sarrus."""
+        if not matriz_a.es_cuadrada():
+            return "Error: La matriz debe ser cuadrada para calcular su determinante."
+        
+        if matriz_a.m != 3:
+            return f"Error: La Regla de Sarrus solo se aplica a matrices 3×3. Esta matriz es {matriz_a.m}×{matriz_a.n}."
+        
+        resultado = "=== Cálculo del Determinante por Regla de Sarrus ===\n\n"
+        resultado += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
+        
+        A = matriz_a.filas
+        resultado += "Regla de Sarrus para matrices 3×3:\n"
+        resultado += "det(A) = (a₁₁·a₂₂·a₃₃ + a₁₂·a₂₃·a₃₁ + a₁₃·a₂₁·a₃₂) - (a₁₃·a₂₂·a₃₁ + a₁₁·a₂₃·a₃₂ + a₁₂·a₂₁·a₃₃)\n\n"
+        
+        # Productos diagonales principales (hacia abajo)
+        prod1 = A[0][0] * A[1][1] * A[2][2]
+        prod2 = A[0][1] * A[1][2] * A[2][0]
+        prod3 = A[0][2] * A[1][0] * A[2][1]
+        suma_positiva = prod1 + prod2 + prod3
+        
+        resultado += "Productos diagonales principales (suma positiva):\n"
+        resultado += f"  P₁ = A[1,1] × A[2,2] × A[3,3] = {A[0][0]:.4f} × {A[1][1]:.4f} × {A[2][2]:.4f} = {prod1:.4f}\n"
+        resultado += f"  P₂ = A[1,2] × A[2,3] × A[3,1] = {A[0][1]:.4f} × {A[1][2]:.4f} × {A[2][0]:.4f} = {prod2:.4f}\n"
+        resultado += f"  P₃ = A[1,3] × A[2,1] × A[3,2] = {A[0][2]:.4f} × {A[1][0]:.4f} × {A[2][1]:.4f} = {prod3:.4f}\n"
+        resultado += f"  Suma positiva: {prod1:.4f} + {prod2:.4f} + {prod3:.4f} = {suma_positiva:.4f}\n\n"
+        
+        # Productos diagonales secundarios (hacia arriba)
+        prod4 = A[0][2] * A[1][1] * A[2][0]
+        prod5 = A[0][0] * A[1][2] * A[2][1]
+        prod6 = A[0][1] * A[1][0] * A[2][2]
+        suma_negativa = prod4 + prod5 + prod6
+        
+        resultado += "Productos diagonales secundarios (suma negativa):\n"
+        resultado += f"  P₄ = A[1,3] × A[2,2] × A[3,1] = {A[0][2]:.4f} × {A[1][1]:.4f} × {A[2][0]:.4f} = {prod4:.4f}\n"
+        resultado += f"  P₅ = A[1,1] × A[2,3] × A[3,2] = {A[0][0]:.4f} × {A[1][2]:.4f} × {A[2][1]:.4f} = {prod5:.4f}\n"
+        resultado += f"  P₆ = A[1,2] × A[2,1] × A[3,3] = {A[0][1]:.4f} × {A[1][0]:.4f} × {A[2][2]:.4f} = {prod6:.4f}\n"
+        resultado += f"  Suma negativa: {prod4:.4f} + {prod5:.4f} + {prod6:.4f} = {suma_negativa:.4f}\n\n"
+        
+        determinante = suma_positiva - suma_negativa
+        resultado += f"Determinante = Suma positiva - Suma negativa\n"
+        resultado += f"det(A) = {suma_positiva:.4f} - {suma_negativa:.4f} = {determinante:.4f}\n\n"
+        
+        # Interpretación
+        if abs(determinante) < 1e-10:
+            resultado += "✓ El determinante es cero, la matriz NO tiene inversa (es singular).\n"
+        else:
+            resultado += "✓ El determinante es distinto de cero, por lo tanto A es invertible.\n"
+        
+        return resultado
+
+    @staticmethod
+    def determinante_cofactores(matriz_a: Matriz) -> str:
+        """Calcula el determinante de una matriz cuadrada usando expansión por cofactores."""
+        if not matriz_a.es_cuadrada():
+            return "Error: La matriz debe ser cuadrada para calcular su determinante."
+        
+        resultado = "=== Cálculo del Determinante por Expansión por Cofactores ===\n\n"
+        resultado += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
+        
+        A = [fila[:] for fila in matriz_a.filas]  # Copia para no modificar original
+        
+        def det_recursivo(mat: List[List[float]], nivel: int = 0) -> tuple[float, str]:
+            """Calcula el determinante recursivamente con logs de pasos."""
+            n = len(mat)
+            
+            # Caso base: matriz 1×1
+            if n == 1:
+                val = mat[0][0]
+                return val, f"{'  ' * nivel}det = {val:.4f}\n"
+            
+            # Caso base: matriz 2×2
+            if n == 2:
+                det_val = mat[0][0] * mat[1][1] - mat[0][1] * mat[1][0]
+                log = f"{'  ' * nivel}Matriz 2×2:\n"
+                log += f"{'  ' * nivel}[{mat[0][0]:.4f}  {mat[0][1]:.4f}]\n"
+                log += f"{'  ' * nivel}[{mat[1][0]:.4f}  {mat[1][1]:.4f}]\n"
+                log += f"{'  ' * nivel}det = {mat[0][0]:.4f} × {mat[1][1]:.4f} - {mat[0][1]:.4f} × {mat[1][0]:.4f} = {det_val:.4f}\n"
+                return det_val, log
+            
+            # Expansión por la primera fila
+            det_val = 0.0
+            log = f"{'  ' * nivel}Expansión por la fila 1:\n"
+            
+            for j in range(n):
+                # Calcular cofactor
+                signo = (-1) ** (1 + j + 1)  # +1 porque filas/cols son 1-indexed para el usuario
+                menor = OperacionesMatriciales._submatriz(mat, 0, j)
+                
+                det_menor, log_menor = det_recursivo(menor, nivel + 1)
+                cofactor = signo * det_menor
+                det_val += mat[0][j] * cofactor
+                
+                signo_str = "+" if signo > 0 else "-"
+                log += f"{'  ' * nivel}Cofactor de A[1,{j+1}]:\n"
+                log += f"{'  ' * nivel}  Signo: {signo_str} (cofactor = (-1)^(1+{j+1}) = {signo})\n"
+                log += f"{'  ' * nivel}  Menor (eliminando fila 1 y columna {j+1}):\n"
+                log += log_menor
+                log += f"{'  ' * nivel}  Cofactor = {signo:.0f} × {det_menor:.4f} = {cofactor:.4f}\n"
+                log += f"{'  ' * nivel}  Término: A[1,{j+1}] × cofactor = {mat[0][j]:.4f} × {cofactor:.4f} = {mat[0][j] * cofactor:.4f}\n\n"
+            
+            log += f"{'  ' * nivel}det = suma de términos = {det_val:.4f}\n"
+            return det_val, log
+        
+        det_value, det_log = det_recursivo(A)
+        
+        resultado += det_log
+        resultado += f"\n=== Resultado Final ===\n"
+        resultado += f"det(A) = {det_value:.4f}\n\n"
+        
+        # Interpretación
+        if abs(det_value) < 1e-10:
+            resultado += "✓ El determinante es cero, la matriz NO tiene inversa (es singular).\n"
+        else:
+            resultado += "✓ El determinante es distinto de cero, por lo tanto A es invertible.\n"
+        
+        return resultado
+
+    @staticmethod
+    def determinante_cramer(matriz_a: Matriz) -> str:
+        """Calcula el determinante usando el método de Cramer (para matrices pequeñas)."""
+        if not matriz_a.es_cuadrada():
+            return "Error: La matriz debe ser cuadrada para calcular su determinante."
+        
+        if matriz_a.m > 3:
+            return f"Nota: El método de Cramer es ilustrativo para matrices pequeñas. Esta matriz es {matriz_a.m}×{matriz_a.n}.\nUse expansión por cofactores para matrices grandes."
+        
+        resultado = "=== Cálculo del Determinante por Método de Cramer ===\n\n"
+        resultado += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
+        
+        resultado += "El método de Cramer calcula el determinante resolviendo sistemas lineales.\n"
+        resultado += "Para una matriz cuadrada A, det(A) puede calcularse mediante la expansión\n"
+        resultado += "por cofactores o directamente para matrices pequeñas.\n\n"
+        
+        # Para matrices pequeñas, usamos expansión por cofactores como "método de Cramer"
+        if matriz_a.m == 1:
+            det_value = matriz_a.filas[0][0]
+            resultado += f"Matriz 1×1: det(A) = A[1,1] = {det_value:.4f}\n"
+        elif matriz_a.m == 2:
+            A = matriz_a.filas
+            det_value = A[0][0] * A[1][1] - A[0][1] * A[1][0]
+            resultado += f"Matriz 2×2:\n"
+            resultado += f"det(A) = A[1,1] × A[2,2] - A[1,2] × A[2,1]\n"
+            resultado += f"det(A) = {A[0][0]:.4f} × {A[1][1]:.4f} - {A[0][1]:.4f} × {A[1][0]:.4f}\n"
+            resultado += f"det(A) = {det_value:.4f}\n"
+        else:  # 3×3
+            A = matriz_a.filas
+            det_value = (A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) -
+                        A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
+                        A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]))
+            resultado += f"Expansión por cofactores (método de Cramer para 3×3):\n"
+            resultado += f"det(A) = A[1,1] × det(M₁₁) - A[1,2] × det(M₁₂) + A[1,3] × det(M₁₃)\n"
+            resultado += f"det(A) = {det_value:.4f}\n"
+        
+        resultado += f"\n=== Resultado Final ===\n"
+        resultado += f"det(A) = {det_value:.4f}\n\n"
+        
+        # Interpretación
+        if abs(det_value) < 1e-10:
+            resultado += "✓ El determinante es cero, la matriz NO tiene inversa (es singular).\n"
+        else:
+            resultado += "✓ El determinante es distinto de cero, por lo tanto A es invertible.\n"
+        
+        return resultado
+
+    @staticmethod
+    def verificar_propiedades_determinante(matriz_a: Matriz) -> str:
+        """Verifica las propiedades teóricas del determinante."""
+        if not matriz_a.es_cuadrada():
+            return "Error: La matriz debe ser cuadrada para verificar propiedades del determinante."
+        
+        resultado = "=== Verificación de Propiedades del Determinante ===\n\n"
+        resultado += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
+        
+        # Calcular determinante original
+        det_A = OperacionesMatriciales._calcular_det_directo(matriz_a.filas)
+        
+        resultado += f"Determinante de A: det(A) = {det_A:.4f}\n\n"
+        
+        # Propiedad 1: Si una fila o columna es cero
+        resultado += "--- Propiedad 1: Si una fila o columna es cero → det(A) = 0 ---\n"
+        fila_cero = all(abs(x) < 1e-10 for x in matriz_a.filas[0])
+        col_cero = all(abs(matriz_a.filas[i][0]) < 1e-10 for i in range(matriz_a.m))
+        
+        if fila_cero:
+            resultado += f"✓ La fila 1 es cero → det(A) = 0. Verificado: {abs(det_A) < 1e-10}\n"
+        elif col_cero:
+            resultado += f"✓ La columna 1 es cero → det(A) = 0. Verificado: {abs(det_A) < 1e-10}\n"
+        else:
+            # Crear matriz con fila cero para demostrar
+            A_fila_cero = [fila[:] for fila in matriz_a.filas]
+            A_fila_cero[0] = [0.0] * matriz_a.n
+            det_fila_cero = OperacionesMatriciales._calcular_det_directo(A_fila_cero)
+            resultado += f"Ejemplo: Si la fila 1 es cero, det = {det_fila_cero:.4f} (debe ser 0).\n"
+        
+        # Propiedad 2: Si dos filas o columnas son iguales o proporcionales
+        resultado += "\n--- Propiedad 2: Si dos filas/columnas son iguales/proporcionales → det(A) = 0 ---\n"
+        filas_iguales = any(
+            i != j and all(abs(matriz_a.filas[i][k] - matriz_a.filas[j][k]) < 1e-10 for k in range(matriz_a.n))
+            for i in range(matriz_a.m) for j in range(matriz_a.m)
+        )
+        
+        if filas_iguales:
+            resultado += f"✓ Hay filas iguales → det(A) = 0. Verificado: {abs(det_A) < 1e-10}\n"
+        else:
+            # Crear matriz con filas iguales
+            A_filas_iguales = [fila[:] for fila in matriz_a.filas]
+            A_filas_iguales[1] = A_filas_iguales[0][:]
+            det_filas_iguales = OperacionesMatriciales._calcular_det_directo(A_filas_iguales)
+            resultado += f"Ejemplo: Si las filas 1 y 2 son iguales, det = {det_filas_iguales:.4f} (debe ser 0).\n"
+        
+        # Propiedad 3: Intercambiar dos filas cambia el signo
+        resultado += "\n--- Propiedad 3: Intercambiar dos filas → det cambia de signo ---\n"
+        A_intercambio = [fila[:] for fila in matriz_a.filas]
+        A_intercambio[0], A_intercambio[1] = A_intercambio[1][:], A_intercambio[0][:]
+        det_intercambio = OperacionesMatriciales._calcular_det_directo(A_intercambio)
+        resultado += f"Si intercambiamos las filas 1 y 2:\n"
+        resultado += f"det(A') = {det_intercambio:.4f}\n"
+        resultado += f"det(A) = {det_A:.4f}\n"
+        resultado += f"Verificación: det(A') = -det(A) → {abs(det_intercambio + det_A) < 1e-10}\n"
+        
+        # Propiedad 4: Multiplicar una fila por k multiplica el determinante por k
+        resultado += "\n--- Propiedad 4: Multiplicar una fila por k → det se multiplica por k ---\n"
+        k = 2.0
+        A_k = [fila[:] for fila in matriz_a.filas]
+        A_k[0] = [x * k for x in A_k[0]]
+        det_k = OperacionesMatriciales._calcular_det_directo(A_k)
+        resultado += f"Si multiplicamos la fila 1 por k = {k:.4f}:\n"
+        resultado += f"det(k·fila1) = {det_k:.4f}\n"
+        resultado += f"k × det(A) = {k:.4f} × {det_A:.4f} = {k * det_A:.4f}\n"
+        resultado += f"Verificación: det(k·fila1) = k × det(A) → {abs(det_k - k * det_A) < 1e-10}\n"
+        
+        # Propiedad 5: det(AB) = det(A) × det(B)
+        resultado += "\n--- Propiedad 5: det(AB) = det(A) × det(B) ---\n"
+        resultado += "Nota: Esta propiedad requiere una segunda matriz B.\n"
+        resultado += "Puede verificar esta propiedad en la pestaña de Matrices seleccionando dos matrices.\n"
+        
+        return resultado
+
+    @staticmethod
+    def verificar_propiedad_multiplicativa(matriz_a: Matriz, matriz_b: Matriz) -> str:
+        """Verifica la propiedad det(AB) = det(A) × det(B)."""
+        if not matriz_a.es_cuadrada() or not matriz_b.es_cuadrada():
+            return "Error: Ambas matrices deben ser cuadradas."
+        
+        if matriz_a.n != matriz_b.m:
+            return f"Error: No se pueden multiplicar matrices {matriz_a.m}×{matriz_a.n} y {matriz_b.m}×{matriz_b.n}."
+        
+        resultado = "=== Verificación de Propiedad: det(AB) = det(A) × det(B) ===\n\n"
+        resultado += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
+        resultado += f"Matriz B ({matriz_b.m}×{matriz_b.n}):\n{matriz_b}\n\n"
+        
+        det_A = OperacionesMatriciales._calcular_det_directo(matriz_a.filas)
+        det_B = OperacionesMatriciales._calcular_det_directo(matriz_b.filas)
+        
+        resultado += f"det(A) = {det_A:.4f}\n"
+        resultado += f"det(B) = {det_B:.4f}\n"
+        resultado += f"det(A) × det(B) = {det_A:.4f} × {det_B:.4f} = {det_A * det_B:.4f}\n\n"
+        
+        try:
+            AB = matriz_a * matriz_b
+            det_AB = OperacionesMatriciales._calcular_det_directo(AB.filas)
+            
+            resultado += f"Producto AB ({AB.m}×{AB.n}):\n{AB}\n\n"
+            resultado += f"det(AB) = {det_AB:.4f}\n\n"
+            
+            cumple = abs(det_AB - det_A * det_B) < 1e-10
+            resultado += "--- Verificación ---\n"
+            resultado += f"det(AB) = {det_AB:.4f}\n"
+            resultado += f"det(A) × det(B) = {det_A * det_B:.4f}\n"
+            
+            if cumple:
+                resultado += "✓ La propiedad se cumple: det(AB) = det(A) × det(B)\n"
+            else:
+                resultado += "✗ La propiedad NO se cumple para estas matrices.\n"
+        except Exception as e:
+            resultado += f"Error al calcular AB: {e}\n"
+        
+        return resultado
+
+    @staticmethod
+    def _calcular_det_directo(mat: List[List[float]]) -> float:
+        """Calcula el determinante directamente (sin logs)."""
+        n = len(mat)
+        
+        if n == 1:
+            return mat[0][0]
+        
+        if n == 2:
+            return mat[0][0] * mat[1][1] - mat[0][1] * mat[1][0]
+        
+        # Expansión por primera fila
+        det = 0.0
+        for j in range(n):
+            menor = OperacionesMatriciales._submatriz(mat, 0, j)
+            signo = (-1) ** (1 + j + 1)
+            det += mat[0][j] * signo * OperacionesMatriciales._calcular_det_directo(menor)
+        
+        return det
+
+    # ==================================================
+    # === FIN: CÓDIGO AÑADIDO PARA LA TAREA 7 ===
+    # ==================================================
+
 
 # ============================
 # Interfaz (Tkinter)
@@ -987,6 +1302,7 @@ class AlgebraLinealGUI(ttk.Frame):
         self._build_matrices_tab()
         self._build_vectores_tab()
         self._build_matrices_operations_tab()
+        self._build_determinantes_tab()
     
     def _build_matrices_tab(self):
         matrices_frame = ttk.Frame(self.notebook)
@@ -1200,6 +1516,14 @@ class AlgebraLinealGUI(ttk.Frame):
         ttk.Button(ops_buttons, text="Inversa de A", command=self._calculate_inverse).pack(side=tk.LEFT, padx=(0,8))
         # ==================================================
         # === FIN: CÓDIGO AÑADIDO PARA LA TAREA 6 ===
+        # ==================================================
+        
+        # ==================================================
+        # === INICIO: CÓDIGO AÑADIDO PARA LA TAREA 7 ===
+        # ==================================================
+        ttk.Button(ops_buttons, text="Verificar det(AB)", command=self._verify_det_multiplicative_matrices).pack(side=tk.LEFT, padx=(0,8))
+        # ==================================================
+        # === FIN: CÓDIGO AÑADIDO PARA LA TAREA 7 ===
         # ==================================================
         
         card_input = ttk.Frame(matrices_ops_frame, style="Card.TFrame")
@@ -1726,7 +2050,7 @@ class AlgebraLinealGUI(ttk.Frame):
         try:
             matriz_a, _ = self._read_matrices()
             resultado = OperacionesMatriciales.matriz_traspuesta(matriz_a)
-            self.txt_matrices.delete("1.KeyError: ", tk.END)
+            self.txt_matrices.delete("1.0", tk.END)
             self.txt_matrices.insert(tk.END, resultado)
             self._status("Cálculo de la traspuesta completado.")
         except Exception as e:
@@ -1774,6 +2098,18 @@ class AlgebraLinealGUI(ttk.Frame):
 
     def _solve_matrices(self):
         self._matrix_equation()
+    
+    def _verify_det_multiplicative_matrices(self):
+        """Verifica la propiedad det(AB) = det(A) × det(B) desde la pestaña de Matrices."""
+        try:
+            matriz_a, matriz_b = self._read_matrices()
+            resultado = OperacionesMatriciales.verificar_propiedad_multiplicativa(matriz_a, matriz_b)
+            self.txt_matrices.delete("1.0", tk.END)
+            self.txt_matrices.insert(tk.END, resultado)
+            self._status("Propiedad multiplicativa verificada.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en verificación de propiedad multiplicativa.")
     
     def _load_matrix_example(self):
         self._render_matrix_grid(3, 3, 3, 2)
@@ -1842,6 +2178,313 @@ class AlgebraLinealGUI(ttk.Frame):
                 self._status("Resultado de matrices exportado.")
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
+    
+    # ==================================================
+    # === INICIO: MÉTODOS GUI PARA TAREA 7 ===
+    # ==================================================
+    
+    def _build_determinantes_tab(self):
+        """Construye la pestaña de Determinantes."""
+        determinantes_frame = ttk.Frame(self.notebook)
+        self.notebook.add(determinantes_frame, text="Determinantes")
+        
+        card_cfg = ttk.Frame(determinantes_frame, style="Card.TFrame")
+        card_cfg.pack(fill=tk.X, padx=10, pady=(10, 8))
+        cfg = ttk.Frame(card_cfg)
+        cfg.pack(fill=tk.X, padx=10, pady=8)
+        
+        self.var_det_n = tk.IntVar()
+        
+        ttk.Label(cfg, text="Matriz cuadrada A:").grid(row=0, column=0, sticky="w")
+        ttk.Label(cfg, text="Tamaño (n×n):").grid(row=0, column=1, sticky="w")
+        self.sp_det_n = ttk.Spinbox(cfg, from_=1, to=8, width=6, textvariable=self.var_det_n, command=self._apply_det_size)
+        self.sp_det_n.grid(row=0, column=2, padx=(6,14))
+        
+        ttk.Button(cfg, text="Crear matriz", command=self._apply_det_size).grid(row=0, column=3, padx=(8,0))
+        ttk.Button(cfg, text="Ejemplo", command=self._load_det_example).grid(row=0, column=4, padx=(8,0))
+        ttk.Button(cfg, text="Limpiar", command=self._clear_det).grid(row=0, column=5, padx=(8,0))
+        
+        card_ops = ttk.Frame(determinantes_frame, style="Card.TFrame")
+        card_ops.pack(fill=tk.X, padx=10, pady=(0,8))
+        ops = ttk.Frame(card_ops)
+        ops.pack(fill=tk.X, padx=10, pady=8)
+        
+        ttk.Label(ops, text="Métodos de cálculo:", style="Header.TLabel").pack(anchor="w")
+        
+        ops_buttons = ttk.Frame(ops)
+        ops_buttons.pack(fill=tk.X, pady=(4,0))
+        
+        ttk.Button(ops_buttons, text="Método de Cramer", command=self._det_cramer).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(ops_buttons, text="Regla de Sarrus", command=self._det_sarrus).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(ops_buttons, text="Cofactores", command=self._det_cofactores).pack(side=tk.LEFT, padx=(0,8))
+        
+        ttk.Label(ops, text="Propiedades:", style="Header.TLabel").pack(anchor="w", pady=(10,0))
+        
+        props_buttons = ttk.Frame(ops)
+        props_buttons.pack(fill=tk.X, pady=(4,0))
+        
+        ttk.Button(props_buttons, text="Verificar propiedades", command=self._verify_det_properties).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(props_buttons, text="Verificar det(AB)", command=self._verify_det_multiplicative).pack(side=tk.LEFT, padx=(0,8))
+        
+        card_input = ttk.Frame(determinantes_frame, style="Card.TFrame")
+        card_input.pack(fill=tk.BOTH, expand=False, padx=10, pady=(0,8))
+        input_frame = ttk.Frame(card_input)
+        input_frame.pack(fill=tk.BOTH, expand=False, padx=10, pady=8)
+        
+        ttk.Label(input_frame, text="Ingreso de matriz cuadrada A", style="Header.TLabel").pack(anchor="w", pady=(0,6))
+        
+        self.det_canvas = tk.Canvas(input_frame, highlightthickness=0, height=200)
+        self.det_frame = ttk.Frame(self.det_canvas)
+        self.det_scroll_y = ttk.Scrollbar(input_frame, orient="vertical", command=self.det_canvas.yview)
+        self.det_canvas.configure(yscrollcommand=self.det_scroll_y.set)
+        self.det_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
+        self.det_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.det_canvas_window = self.det_canvas.create_window((0, 0), window=self.det_frame, anchor="nw")
+        self.det_frame.bind("<Configure>", lambda e: self.det_canvas.configure(scrollregion=self.det_canvas.bbox("all")))
+        self.det_canvas.bind("<Configure>", self._on_det_canvas_resize)
+        
+        card_out_det = ttk.Frame(determinantes_frame, style="Card.TFrame")
+        card_out_det.pack(fill=tk.BOTH, expand=True, padx=10)
+        out_det = ttk.Frame(card_out_det)
+        out_det.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+        out_det.columnconfigure(0, weight=1)
+        out_det.rowconfigure(1, weight=1)
+        
+        ttk.Label(out_det, text="Resultados", style="Header.TLabel").grid(row=0, column=0, sticky="w")
+        self.txt_determinantes = tk.Text(out_det, wrap="word", height=30, font=("Consolas", 10))
+        self.txt_determinantes.grid(row=1, column=0, sticky="nsew", pady=(4,0))
+        
+        btns_det = ttk.Frame(out_det)
+        btns_det.grid(row=2, column=0, sticky="e", pady=(6,0))
+        ttk.Button(btns_det, text="Copiar resultado", command=self._copy_det_output).pack(side=tk.LEFT)
+        ttk.Button(btns_det, text="Exportar pasos…", command=self._export_det_output).pack(side=tk.LEFT, padx=(8,0))
+        
+        self.var_det_n.set(3)
+        self._render_det_grid(3)
+    
+    def _on_det_canvas_resize(self, event):
+        self.det_canvas.itemconfigure(self.det_canvas_window, width=event.width)
+    
+    def _render_det_grid(self, n: int):
+        """Renderiza la cuadrícula para ingresar una matriz cuadrada."""
+        for child in self.det_frame.winfo_children():
+            child.destroy()
+        self.det_entries: List[List[ttk.Entry]] = []
+        
+        for j in range(n):
+            ttk.Label(self.det_frame, text=f"Col {j+1}").grid(row=0, column=j+1, padx=4, pady=4)
+        
+        vcmd_num = (self.register(self._validate_number), "%P")
+        for i in range(n):
+            ttk.Label(self.det_frame, text=f"Fila {i+1}").grid(row=i+1, column=0, padx=4, pady=4)
+            fila_entries: List[ttk.Entry] = []
+            for j in range(n):
+                e = ttk.Entry(self.det_frame, width=8, justify="center", validate="key", validatecommand=vcmd_num)
+                e.grid(row=i+1, column=j+1, padx=3, pady=3)
+                e.insert(0, "0")
+                fila_entries.append(e)
+            self.det_entries.append(fila_entries)
+        
+        for j in range(n + 1):
+            self.det_frame.columnconfigure(j, weight=1)
+    
+    def _apply_det_size(self):
+        n = max(1, int(self.var_det_n.get() or 1))
+        self._render_det_grid(n)
+        self._status(f"Matriz cuadrada {n}×{n} creada.")
+    
+    def _read_det_matrix(self) -> Matriz:
+        """Lee la matriz cuadrada ingresada."""
+        n = int(self.var_det_n.get())
+        
+        filas = []
+        for i in range(n):
+            fila = []
+            for j in range(n):
+                val = self.det_entries[i][j].get().strip().replace(",", ".")
+                if val in ("", "-", "."):
+                    raise ValueError(f"Matriz A[{i+1},{j+1}] tiene valor vacío o incompleto.")
+                fila.append(float(val))
+            filas.append(fila)
+        
+        return Matriz(filas)
+    
+    def _det_cramer(self):
+        """Calcula el determinante usando el método de Cramer."""
+        try:
+            matriz_a = self._read_det_matrix()
+            resultado = OperacionesMatriciales.determinante_cramer(matriz_a)
+            self.txt_determinantes.delete("1.0", tk.END)
+            self.txt_determinantes.insert(tk.END, resultado)
+            self._status("Determinante por método de Cramer calculado.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en cálculo de determinante.")
+    
+    def _det_sarrus(self):
+        """Calcula el determinante usando la Regla de Sarrus."""
+        try:
+            matriz_a = self._read_det_matrix()
+            resultado = OperacionesMatriciales.determinante_sarrus(matriz_a)
+            self.txt_determinantes.delete("1.0", tk.END)
+            self.txt_determinantes.insert(tk.END, resultado)
+            self._status("Determinante por Regla de Sarrus calculado.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en cálculo de determinante.")
+    
+    def _det_cofactores(self):
+        """Calcula el determinante usando expansión por cofactores."""
+        try:
+            matriz_a = self._read_det_matrix()
+            resultado = OperacionesMatriciales.determinante_cofactores(matriz_a)
+            self.txt_determinantes.delete("1.0", tk.END)
+            self.txt_determinantes.insert(tk.END, resultado)
+            self._status("Determinante por cofactores calculado.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en cálculo de determinante.")
+    
+    def _verify_det_properties(self):
+        """Verifica las propiedades del determinante."""
+        try:
+            matriz_a = self._read_det_matrix()
+            resultado = OperacionesMatriciales.verificar_propiedades_determinante(matriz_a)
+            self.txt_determinantes.delete("1.0", tk.END)
+            self.txt_determinantes.insert(tk.END, resultado)
+            self._status("Propiedades del determinante verificadas.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en verificación de propiedades.")
+    
+    def _verify_det_multiplicative(self):
+        """Verifica la propiedad det(AB) = det(A) × det(B)."""
+        try:
+            # Necesitamos leer también la matriz B de la pestaña de Matrices
+            # Por simplicidad, usaremos un diálogo para ingresar B
+            matriz_a = self._read_det_matrix()
+            
+            # Crear diálogo para ingresar matriz B
+            dialog = tk.Toplevel(self.master)
+            dialog.title("Matriz B para verificar det(AB)")
+            dialog.geometry("500x300")
+            dialog.transient(self.master)
+            dialog.grab_set()
+            
+            resultado = [None]
+            
+            ttk.Label(dialog, text=f"Ingrese matriz B cuadrada (debe ser {matriz_a.n}×{matriz_a.n}):", 
+                     font=("Segoe UI", 10, "bold")).pack(pady=10)
+            
+            frame_b = ttk.Frame(dialog)
+            frame_b.pack(pady=10)
+            
+            b_entries = []
+            for i in range(matriz_a.n):
+                fila_entries = []
+                for j in range(matriz_a.n):
+                    e = ttk.Entry(frame_b, width=6, justify="center")
+                    e.grid(row=i, column=j, padx=3, pady=3)
+                    e.insert(0, "0")
+                    fila_entries.append(e)
+                b_entries.append(fila_entries)
+            
+            def ok_clicked():
+                try:
+                    filas_b = []
+                    for i in range(matriz_a.n):
+                        fila = []
+                        for j in range(matriz_a.n):
+                            val = b_entries[i][j].get().strip().replace(",", ".")
+                            if val in ("", "-", "."):
+                                raise ValueError(f"Matriz B[{i+1},{j+1}] tiene valor vacío o incompleto.")
+                            fila.append(float(val))
+                        filas_b.append(fila)
+                    resultado[0] = Matriz(filas_b)
+                    dialog.destroy()
+                except Exception as e:
+                    messagebox.showerror("Error", str(e))
+            
+            def cancel_clicked():
+                dialog.destroy()
+            
+            frame_buttons = ttk.Frame(dialog)
+            frame_buttons.pack(pady=20)
+            ttk.Button(frame_buttons, text="Aceptar", command=ok_clicked).pack(side=tk.LEFT, padx=10)
+            ttk.Button(frame_buttons, text="Cancelar", command=cancel_clicked).pack(side=tk.LEFT, padx=10)
+            
+            dialog.wait_window()
+            
+            if resultado[0] is None:
+                return
+            
+            matriz_b = resultado[0]
+            res = OperacionesMatriciales.verificar_propiedad_multiplicativa(matriz_a, matriz_b)
+            self.txt_determinantes.delete("1.0", tk.END)
+            self.txt_determinantes.insert(tk.END, res)
+            self._status("Propiedad multiplicativa verificada.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en verificación de propiedad multiplicativa.")
+    
+    def _load_det_example(self):
+        """Carga un ejemplo de matriz 3×3."""
+        self._render_det_grid(3)
+        datos = [
+            [2, 1, -1],
+            [-3, -1, 2],
+            [-2, 1, 2]
+        ]
+        for i in range(3):
+            for j in range(3):
+                e = self.det_entries[i][j]
+                e.delete(0, tk.END)
+                e.insert(0, str(datos[i][j]))
+        self._status("Ejemplo de matriz 3×3 cargado.")
+    
+    def _clear_det(self):
+        """Limpia los campos de la pestaña de determinantes."""
+        for fila in getattr(self, 'det_entries', []):
+            for e in fila:
+                e.delete(0, tk.END)
+                e.insert(0, "0")
+        self.txt_determinantes.delete("1.0", tk.END)
+        self._status("Campos de determinantes limpiados.")
+    
+    def _copy_det_output(self):
+        """Copia el resultado de determinantes al portapapeles."""
+        contenido = self.txt_determinantes.get("1.0", tk.END)
+        if not contenido.strip():
+            messagebox.showinfo("Copiar", "No hay contenido para copiar.")
+            return
+        self.master.clipboard_clear()
+        self.master.clipboard_append(contenido)
+        self._status("Resultado de determinantes copiado.")
+    
+    def _export_det_output(self):
+        """Exporta el resultado de determinantes a un archivo."""
+        contenido = self.txt_determinantes.get("1.0", tk.END).strip()
+        if not contenido:
+            messagebox.showinfo("Exportar", "No hay contenido para exportar.")
+            return
+        ruta = filedialog.asksaveasfilename(
+            title="Guardar resultado de determinantes",
+            defaultextension=".txt",
+            filetypes=[("Texto", "*.txt"), ("Todos", "*.*")],
+            initialfile="determinantes_resultado.txt",
+        )
+        if ruta:
+            try:
+                with open(ruta, "w", encoding="utf-8") as f:
+                    f.write(contenido)
+                messagebox.showinfo("Exportar", f"Archivo guardado en:\n{ruta}")
+                self._status("Resultado de determinantes exportado.")
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
+    
+    # ==================================================
+    # === FIN: MÉTODOS GUI PARA TAREA 7 ===
+    # ==================================================
 
 
 if __name__ == "__main__":
