@@ -2,10 +2,10 @@
   # Calculadora de Álgebra Lineal
 
   ## Asegurarse que la terminal este abierta en frontend "Muntrix/Frontend"
-  Ingresa `npm i` en la terminal para instalar las dependencias
+  Ingresa `npm i` en la terminal para instalar las dependencias de React
   
   
-  Ingresa `pip install -r requirements.txt` en la terminal para instalar dependencias
+  Ingresa `pip install -r requirements.txt` en la terminal para instalar dependencias de Python
 
   ### Compilacion
 
