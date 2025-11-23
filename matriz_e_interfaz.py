@@ -1,17 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
-from typing import List
-
-"""
-Aplicación de una sola pieza (NO modular) con interfaz cuidada en Tkinter.
-- Sin librerías externas (solo tkinter/ttk de la librería estándar).
-- Calcula sistemas lineales por Eliminación Gaussiana con pivoteo parcial.
-- Operaciones con vectores: suma, multiplicación por escalar, combinación lineal.
-- Ecuaciones vectoriales y matriciales.
-- UI con pestañas, validación de entradas, ayuda, exportar y copiar.
-
-Ejecuta:  python matriz_e_interfaz.py
-"""
+from typing import Dict, List, Tuple, Any
 
 # ============================
 # Núcleo de cálculo (modelo)
@@ -79,36 +68,48 @@ class SistemaLineal:
         filas, columnas = len(self.matriz), len(self.matriz[0])
         fila_actual = 0
 
+        # Crear una copia para la reducción de solo pasos
+        matriz_copia = [fila[:] for fila in self.matriz]
+        
+        def _imprimir_matriz_copia(paso: int, operacion: str) -> str:
+            texto = f"Paso {paso} ({operacion}):\n"
+            for fila in matriz_copia:
+                texto += "  ".join(f"{valor:.4f}" for valor in fila) + "\n"
+            return texto + "\n"
+
+
         for col in range(columnas - 1):  # ojo: última col es el término independiente
             if fila_actual >= filas:
                 break
 
-            max_row = max(range(fila_actual, filas), key=lambda i: abs(self.matriz[i][col]))
-            if abs(self.matriz[max_row][col]) < 1e-12:
+            max_row = max(range(fila_actual, filas), key=lambda i: abs(matriz_copia[i][col]))
+            if abs(matriz_copia[max_row][col]) < 1e-12:
                 continue
 
             if fila_actual != max_row:
-                self.matriz[fila_actual], self.matriz[max_row] = self.matriz[max_row], self.matriz[fila_actual]
-                resultado += self._imprimir_matriz(paso, f"Intercambio f{fila_actual + 1} ↔ f{max_row + 1}")
+                matriz_copia[fila_actual], matriz_copia[max_row] = matriz_copia[max_row], matriz_copia[fila_actual]
+                resultado += _imprimir_matriz_copia(paso, f"Intercambio f{fila_actual + 1} ↔ f{max_row + 1}")
                 paso += 1
 
-            pivote = self.matriz[fila_actual][col]
+            pivote = matriz_copia[fila_actual][col]
 
             if abs(pivote) > 1e-12:
-                self.matriz[fila_actual] = [x / pivote for x in self.matriz[fila_actual]]
-                resultado += self._imprimir_matriz(paso, f"f{fila_actual + 1} ← (1/{pivote:.4f}) · f{fila_actual + 1}")
+                matriz_copia[fila_actual] = [x / pivote for x in matriz_copia[fila_actual]]
+                resultado += _imprimir_matriz_copia(paso, f"f{fila_actual + 1} ← (1/{pivote:.4f}) · f{fila_actual + 1}")
                 paso += 1
 
             for i in range(filas):
                 if i != fila_actual:
-                    factor = self.matriz[i][col]
+                    factor = matriz_copia[i][col]
                     if abs(factor) > 1e-12:
-                        self.matriz[i] = [self.matriz[i][k] - factor * self.matriz[fila_actual][k] for k in range(columnas)]
-                        resultado += self._imprimir_matriz(paso, f"f{i + 1} ← f{i + 1} − ({factor:.4f}) · f{fila_actual + 1}")
+                        matriz_copia[i] = [matriz_copia[i][k] - factor * matriz_copia[fila_actual][k] for k in range(columnas)]
+                        resultado += _imprimir_matriz_copia(paso, f"f{i + 1} ← f{i + 1} − ({factor:.4f}) · f{fila_actual + 1}")
                         paso += 1
 
             fila_actual += 1
 
+        # Reemplazar la matriz original con la reducida al final para que `columnas_pivote` funcione.
+        self.matriz = matriz_copia
         return resultado
 
     def _interpretar_resultado(self) -> str:
@@ -294,7 +295,7 @@ class OperacionesVectoriales:
             v1, v2 = vectores[0], vectores[1]
             suma1 = v1 + v2
             suma2 = v2 + v1
-            conmutativa = suma1.componentes == suma2.componentes
+            conmutativa = all(abs(a - b) < 1e-10 for a, b in zip(suma1.componentes, suma2.componentes))
             resultado += f"1. Conmutativa (v₁ + v₂ = v₂ + v₁):\n"
             resultado += f"   v₁ + v₂ = {suma1}\n"
             resultado += f"   v₂ + v₁ = {suma2}\n"
@@ -305,7 +306,7 @@ class OperacionesVectoriales:
             v1, v2, v3 = vectores[0], vectores[1], vectores[2]
             suma1 = (v1 + v2) + v3
             suma2 = v1 + (v2 + v3)
-            asociativa = suma1.componentes == suma2.componentes
+            asociativa = all(abs(a - b) < 1e-10 for a, b in zip(suma1.componentes, suma2.componentes))
             resultado += f"2. Asociativa ((v₁ + v₂) + v₃ = v₁ + (v₂ + v₃)):\n"
             resultado += f"   (v₁ + v₂) + v₃ = {suma1}\n"
             resultado += f"   v₁ + (v₂ + v₃) = {suma2}\n"
@@ -332,11 +333,11 @@ class OperacionesVectoriales:
             escalar1, escalar2 = 2.0, 3.0
             prop1 = (escalar1 + escalar2) * v
             prop2 = escalar1 * v + escalar2 * v
-            distributiva1 = prop1.componentes == prop2.componentes
+            distributiva1 = all(abs(a - b) < 1e-10 for a, b in zip(prop1.componentes, prop2.componentes))
             
             prop3 = escalar1 * (escalar2 * v)
             prop4 = (escalar1 * escalar2) * v
-            asociativa_escalar = prop3.componentes == prop4.componentes
+            asociativa_escalar = all(abs(a - b) < 1e-10 for a, b in zip(prop3.componentes, prop4.componentes))
             
             resultado += f"5. Propiedades de multiplicación por escalar:\n"
             resultado += f"   (α + β)v = αv + βv: ✓ {distributiva1}\n"
@@ -578,6 +579,177 @@ class Matriz:
                     return False
         return True
 
+    def submatriz(self, fila_a_omitir: int, col_a_omitir: int) -> 'Matriz':
+        """Devuelve la submatriz (m-1)x(n-1) eliminando una fila y columna."""
+        if not self.es_cuadrada() or self.m <= 1:
+            raise ValueError("Submatriz requiere una matriz cuadrada de 2x2 o mayor.")
+        
+        nueva_filas = []
+        for i in range(self.m):
+            if i != fila_a_omitir:
+                nueva_fila = [self.filas[i][j] for j in range(self.n) if j != col_a_omitir]
+                nueva_filas.append(nueva_fila)
+        return Matriz(nueva_filas)
+
+    def determinante(self) -> tuple[float, str]:
+        """Calcula y devuelve el determinante y los pasos de cálculo por el método más apropiado."""
+        if not self.es_cuadrada():
+            return 0.0, "Error: El determinante solo se calcula para matrices cuadradas."
+
+        if self.m == 1:
+            return self.filas[0][0], f"Matriz 1x1: det(A) = {self.filas[0][0]:.4f}"
+        
+        # 1. Regla de Sarrus (solo 3x3)
+        if self.m == 3:
+            det, pasos = self._regla_sarrus()
+            return det, pasos
+        
+        # 2. Expansión por Cofactores (Método General)
+        det, pasos = self._expansion_cofactores(self.filas, self.m)
+        return det, pasos
+
+    def _regla_sarrus(self) -> tuple[float, str]:
+        """Regla de Sarrus (solo 3x3)."""
+        if self.m != 3:
+            return 0.0, "Error: Sarrus solo aplica a matrices 3x3."
+
+        A = self.filas
+        d1 = A[0][0]*A[1][1]*A[2][2]
+        d2 = A[0][1]*A[1][2]*A[2][0]
+        d3 = A[0][2]*A[1][0]*A[2][1]
+        
+        i1 = A[0][2]*A[1][1]*A[2][0]
+        i2 = A[0][0]*A[1][2]*A[2][1]
+        i3 = A[0][1]*A[1][0]*A[2][2]
+
+        det = (d1 + d2 + d3) - (i1 + i2 + i3)
+        
+        pasos = f"Regla de Sarrus (solo 3x3):\n"
+        pasos += f"Productos directos: (+{A[0][0]:.2f}*{A[1][1]:.2f}*{A[2][2]:.2f}) + (+{A[0][1]:.2f}*{A[1][2]:.2f}*{A[2][0]:.2f}) + (+{A[0][2]:.2f}*{A[1][0]:.2f}*{A[2][1]:.2f})\n"
+        pasos += f"Productos inversos: (-{A[0][2]:.2f}*{A[1][1]:.2f}*{A[2][0]:.2f}) + (-{A[0][0]:.2f}*{A[1][2]:.2f}*{A[2][1]:.2f}) + (-{A[0][1]:.2f}*{A[1][0]:.2f}*{A[2][2]:.2f})\n"
+        pasos += f"Suma directa: {d1:.4f} + {d2:.4f} + {d3:.4f} = {d1+d2+d3:.4f}\n"
+        pasos += f"Suma inversa: {i1:.4f} + {i2:.4f} + {i3:.4f} = {i1+i2+i3:.4f}\n"
+        pasos += f"det(A) = ({d1+d2+d3:.4f}) - ({i1+i2+i3:.4f}) = {det:.4f}\n"
+        return det, pasos
+
+    def _expansion_cofactores(self, A: List[List[float]], n: int) -> tuple[float, str]:
+        """Expansión por Cofactores (recursivo, línea 1)."""
+        if n == 1:
+            return A[0][0], f"det(A) = {A[0][0]:.4f}"
+        if n == 2:
+            det = A[0][0]*A[1][1] - A[0][1]*A[1][0]
+            pasos = f"det(A) = ({A[0][0]:.4f}*{A[1][1]:.4f}) - ({A[0][1]:.4f}*{A[1][0]:.4f}) = {det:.4f}"
+            return det, pasos
+        
+        det = 0.0
+        pasos = f"Expansión por Cofactores (Fila 1, {n}x{n}):\n"
+        
+        # Creamos una matriz Matriz temporal para usar submatriz.
+        A_temp = Matriz(A)
+        
+        for j in range(n):
+            signo = (-1)**j
+            
+            # Submatriz M(1, j+1)
+            M_sub = A_temp.submatriz(0, j)
+            
+            sub_det, sub_pasos_raw = M_sub.determinante() # Usa Sarrus si es 3x3, sino recursión
+            
+            # Limpiamos el string de pasos para un display más compacto en la recursión
+            if n > 3:
+                # Si la recursión es profunda, solo mostramos el valor para no saturar.
+                sub_pasos = f"det(M) = {sub_det:.4f}"
+            else:
+                sub_pasos = sub_pasos_raw.replace('\n', '\n  ')
+            
+            cofactor = signo * sub_det
+            producto_parcial = A[0][j] * cofactor
+            det += producto_parcial
+            
+            pasos += f"  Cofactor C₁,{j+1} (signo: {'+' if signo > 0 else '-'}):\n"
+            pasos += f"  Matriz M₁,{j+1} ({n-1}x{n-1}):\n{M_sub}\n"
+            pasos += f"  det(M₁,{j+1}) = {sub_det:.4f}\n"
+            pasos += f"  C₁,{j+1} = ({signo}) * {sub_det:.4f} = {cofactor:.4f}\n"
+            pasos += f"  Producto Parcial: A₁,{j+1} ({A[0][j]:.4f}) * C₁,{j+1} ({cofactor:.4f}) = {producto_parcial:.4f}\n\n"
+            
+        pasos += f"Resultado final det(A) = {det:.4f}"
+        return det, pasos
+
+    def inversa(self) -> tuple[bool, str, 'Matriz']:
+        """
+        Calcula la inversa de A (A⁻¹) utilizando Eliminación Gauss-Jordan.
+        Devuelve (es_invertible, pasos_texto, matriz_inversa).
+        """
+        if not self.es_cuadrada():
+            return False, "Error: La matriz no es cuadrada.", Matriz([])
+        if self.m == 0:
+            return False, "Error: Matriz vacía.", Matriz([])
+
+        n = self.m
+        
+        # 1. Crear matriz aumentada [A | I]
+        matriz_ai = [fila[:] + [1.0 if i == j else 0.0 for j in range(n)] for i, fila in enumerate(self.filas)]
+        
+        # Aquí re-implementamos la reducción Gauss-Jordan para invertir matrices
+        A_red = [fila[:] for fila in matriz_ai]
+        pasos = "=== Cálculo de la Matriz Inversa (A⁻¹) por Gauss-Jordan ===\n"
+        pasos += "Matriz aumentada inicial [A | I]:\n" + "\n".join("  ".join(f"{x:.4f}" for x in fila) for fila in A_red) + "\n\n"
+        
+        fila_actual = 0
+        rango = 0
+        
+        for col in range(n):
+            if fila_actual >= n: break
+            
+            # Pivoteo parcial
+            max_row = max(range(fila_actual, n), key=lambda i: abs(A_red[i][col]))
+            if abs(A_red[max_row][col]) < 1e-10:
+                continue # Columna sin pivote
+            
+            if fila_actual != max_row:
+                A_red[fila_actual], A_red[max_row] = A_red[max_row], A_red[fila_actual]
+                pasos += f"Paso {rango + 1}: Intercambio f{fila_actual + 1} ↔ f{max_row + 1}\n"
+                pasos += "\n".join("  ".join(f"{x:.4f}" for x in fila) for fila in A_red) + "\n\n"
+            
+            # Normalizar
+            pivote = A_red[fila_actual][col]
+            if abs(pivote) < 1e-10:
+                continue
+                
+            A_red[fila_actual] = [x / pivote for x in A_red[fila_actual]]
+            pasos += f"Paso {rango + 2}: f{fila_actual + 1} ← (1/{pivote:.4f}) · f{fila_actual + 1}\n"
+            pasos += "\n".join("  ".join(f"{x:.4f}" for x in fila) for fila in A_red) + "\n\n"
+            
+            # Anular (Gauss-Jordan)
+            for i in range(n):
+                if i != fila_actual:
+                    factor = A_red[i][col]
+                    if abs(factor) > 1e-10:
+                        A_red[i] = [A_red[i][k] - factor * A_red[fila_actual][k] for k in range(2 * n)]
+                        pasos += f"Paso {rango + 3}: f{i + 1} ← f{i + 1} − ({factor:.4f}) · f{fila_actual + 1}\n"
+                        pasos += "\n".join("  ".join(f"{x:.4f}" for x in fila) for fila in A_red) + "\n\n"
+
+            fila_actual += 1
+            rango += 3
+
+        # 3. Conclusión
+        # Verificar si la parte izquierda es la Identidad I
+        es_identidad = all(
+            abs(A_red[i][j] - (1.0 if i == j else 0.0)) < 1e-10
+            for i in range(n) for j in range(n)
+        )
+        
+        if es_identidad:
+            inversa_filas = [fila[n:] for fila in A_red]
+            matriz_inv = Matriz(inversa_filas)
+            pasos += "Conclusión: La parte izquierda es la matriz Identidad.\n"
+            pasos += "La matriz **es invertible**.\n\n"
+            pasos += "Matriz Inversa (A⁻¹):\n" + str(matriz_inv) + "\n"
+            return True, pasos, matriz_inv
+        else:
+            pasos += "Conclusión: La parte izquierda no se ha podido reducir a la matriz Identidad.\n"
+            pasos += "La matriz **es singular (no invertible)**.\n"
+            return False, pasos, Matriz([])
 
 class OperacionesMatriciales:
     @staticmethod
@@ -729,7 +901,7 @@ class OperacionesMatriciales:
         resultado += f"Matriz B ({matriz_b.m}×{matriz_b.n}):\n{matriz_b}\n\n"
 
         try:
-            # Lado Izquierdo: (A + B)ᵀ 
+            # Lado Izquierdo: (A + B)ᵀ  
             resultado += "--- Cálculo del Lado Izquierdo: (A + B)ᵀ ---\n"
             # 1. Sumar A + B
             suma_ab = matriz_a + matriz_b
@@ -770,6 +942,122 @@ class OperacionesMatriciales:
             resultado += f"Error: No se puede verificar la propiedad.\n{e}\n"
         
         return resultado
+    
+    @staticmethod
+    def calcular_determinante(matriz_a: Matriz) -> str:
+        """Calcula el determinante de la matriz A con pasos y conclusión sobre invertibilidad."""
+        resultado_str = "=== Cálculo del Determinante de A ===\n\n"
+        resultado_str += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
+
+        if not matriz_a.es_cuadrada():
+            resultado_str += "Error: El determinante solo se calcula para matrices cuadradas."
+            return resultado_str
+
+        try:
+            det_cofactores, pasos_cofactores = matriz_a.determinante() 
+            det_final = det_cofactores
+            
+            resultado_str += "--- Cálculo Detallado ---\n"
+            resultado_str += pasos_cofactores + "\n\n"
+
+            # 2. Conclusión sobre Invertibilidad
+            resultado_str += "--- Conclusión --- (Determinante final: det(A) = " + f"{det_final:.4f}" + ")\n"
+            if abs(det_final) > 1e-10: # No es cero
+                resultado_str += "El determinante es distinto de cero, por lo tanto A **es invertible** (no singular).\n"
+            else:
+                resultado_str += "El determinante es cero, la matriz A **no tiene inversa** (es singular).\n"
+            
+        except Exception as e:
+            resultado_str += f"Error en el cálculo del determinante: {e}\n"
+            
+        return resultado_str
+    
+    @staticmethod
+    def calcular_inversa(matriz_a: Matriz) -> str:
+        """Calcula la matriz inversa A⁻¹ con pasos detallados de Gauss-Jordan."""
+        try:
+            es_invertible, pasos, matriz_inv = matriz_a.inversa()
+            return pasos
+        except Exception as e:
+            return f"Error inesperado al calcular la inversa: {e}"
+
+    # --- Propiedades de Determinantes ---
+    @staticmethod
+    def _verificar_propiedad_teorema(propiedad: str) -> str:
+        """Muestra un mensaje explicativo de una propiedad."""
+        if propiedad == "cero_fila_col":
+            return ("Propiedad 1: **Fila/Columna Cero**\n"
+                    "Si una fila o columna de A es completamente cero, entonces det(A) = 0.\n"
+                    "Razón: Al expandir el determinante a lo largo de esa fila o columna, todos los términos del cofactor son cero.")
+        
+        elif propiedad == "filas_iguales":
+            return ("Propiedad 2: **Filas/Columnas Iguales o Proporcionales**\n"
+                    "Si dos filas o dos columnas de A son iguales o proporcionales, entonces det(A) = 0.\n"
+                    "Razón: La matriz no tiene rango completo, lo que implica dependencia lineal.")
+        
+        elif propiedad == "intercambio":
+            return ("Propiedad 3: **Intercambio de Filas/Columnas**\n"
+                    "Si se intercambian dos filas (o dos columnas) de una matriz A, el determinante cambia de signo: det(A') = -det(A).")
+        
+        elif propiedad == "multiplicacion_fila":
+            return ("Propiedad 4: **Multiplicación de Fila por Escalar**\n"
+                    "Si se multiplica una fila (o columna) de A por un escalar k, el determinante se multiplica por k: det(A') = k * det(A).")
+        
+        elif propiedad == "propiedad_mult":
+            return ("Propiedad 5: **Propiedad Multiplicativa**\n"
+                    "El determinante de un producto es el producto de los determinantes: det(AB) = det(A) * det(B).\n"
+                    "Razón: Una de las propiedades fundamentales de los determinantes.")
+        
+        else:
+            return "Propiedad no reconocida."
+            
+    @staticmethod
+    def regla_cramer_3x3(matriz_aumentada: List[List[float]]) -> str:
+        """Resuelve un sistema 3x3 usando la Regla de Cramer."""
+        
+        M_aug = Matriz(matriz_aumentada)
+        if not M_aug.m == 3 or not M_aug.n == 4:
+            return "Error: La Regla de Cramer (implementada aquí) es solo para sistemas 3x3."
+        
+        A_filas = [fila[:3] for fila in matriz_aumentada]
+        b = [fila[3] for fila in matriz_aumentada]
+        A = Matriz(A_filas)
+        
+        det_A, _ = A.determinante()
+        
+        resultado = "=== Solución de Sistema 3x3 por Regla de Cramer ===\n\n"
+        resultado += f"Matriz A:\n{A}\n"
+        resultado += f"Vector b: ({b[0]:.4f}, {b[1]:.4f}, {b[2]:.4f})\n\n"
+        resultado += f"Determinante de A (det(A)): {det_A:.4f}\n"
+
+        if abs(det_A) < 1e-10:
+            resultado += "\n¡ADVERTENCIA! det(A) ≈ 0. El sistema es singular (no tiene solución única).\n"
+            resultado += "La Regla de Cramer no es aplicable o el sistema es inconsistente/infinitas soluciones.\n"
+            return resultado
+
+        dets = {}
+        for i in range(3):
+            A_i_filas = [fila[:] for fila in A_filas]
+            for j in range(3):
+                A_i_filas[j][i] = b[j]
+            A_i = Matriz(A_i_filas)
+            det_Ai, _ = A_i.determinante()
+            dets[i] = det_Ai
+            
+            resultado += f"\nMatriz A{i+1} (Col {i+1} reemplazada por b):\n{A_i}\n"
+            resultado += f"Determinante de A{i+1} (det(A{i+1})): {det_Ai:.4f}\n"
+
+        x1 = dets[0] / det_A
+        x2 = dets[1] / det_A
+        x3 = dets[2] / det_A
+        
+        resultado += "\n--- Soluciones ---\n"
+        resultado += f"x₁ = det(A₁) / det(A) = {dets[0]:.4f} / {det_A:.4f} = {x1:.4f}\n"
+        resultado += f"x₂ = det(A₂) / det(A) = {dets[1]:.4f} / {det_A:.4f} = {x2:.4f}\n"
+        resultado += f"x₃ = det(A₃) / det(A) = {dets[2]:.4f} / {det_A:.4f} = {x3:.4f}\n"
+        
+        return resultado
+
 
 # ============================
 # Interfaz (Tkinter)
@@ -781,7 +1069,12 @@ class AlgebraLinealGUI(ttk.Frame):
         self.master.geometry("1200x700")
         self.master.minsize(1000, 600)
         self.pack(fill=tk.BOTH, expand=True)
-
+        
+        self.global_matrices: Dict[str, Matriz] = {}  # Almacén de matrices guardadas
+        self.global_matrix_names: List[str] = [f"M{i+1}" for i in range(6)]  # Nombres de M1 a M6
+        self.global_matrix_dims: Dict[str, Tuple[tk.IntVar, tk.IntVar]] = {} # Dimensiones para redibujo
+        self.global_matrix_entries: Dict[str, List[List[ttk.Entry]]] = {} # Entries para lectura/escritura
+        
         self._init_style()
         self._build_menu()
         self._build_header()
@@ -790,7 +1083,60 @@ class AlgebraLinealGUI(ttk.Frame):
 
         self._status("Listo.")
 
-    # ---------- Estilos y menús ----------
+    # ------------------------------------
+    # CORRECCIÓN DE ATTRIBUTEERROR Y NUEVOS HELPERS DE I/O
+    # ------------------------------------
+    def _copy_output_text(self, text_widget: tk.Text):
+        contenido = text_widget.get("1.0", tk.END)
+        if not contenido.strip():
+            messagebox.showinfo("Copiar", "No hay contenido para copiar.")
+            return
+        self.master.clipboard_clear()
+        self.master.clipboard_append(contenido)
+        self._status("Resultado copiado.")
+
+    def _export_output_text(self, text_widget: tk.Text, initial_file: str):
+        contenido = text_widget.get("1.0", tk.END).strip()
+        if not contenido:
+            messagebox.showinfo("Exportar", "No hay contenido para exportar.")
+            return
+        ruta = filedialog.asksaveasfilename(
+            title="Guardar resultado",
+            defaultextension=".txt",
+            filetypes=[("Texto", "*.txt"), ("Todos", "*.*")],
+            initialfile=initial_file,
+        )
+        if ruta:
+            try:
+                with open(ruta, "w", encoding="utf-8") as f:
+                    f.write(contenido)
+                messagebox.showinfo("Exportar", f"Archivo guardado en:\n{ruta}")
+                self._status("Resultado exportado.")
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
+                
+    # Métodos envoltura para la PESTAÑA PRINCIPAL (Sistemas Lineales) y MENÚ
+    def _export(self):
+        self._export_output_text(self.txt, "gauss_pasos.txt")
+
+    def _copy_output(self):
+        self._copy_output_text(self.txt)
+    
+    # Métodos envoltura para la PESTAÑA VECTORES
+    def _copy_vector_output(self):
+        self._copy_output_text(self.txt_vectores)
+
+    def _export_vector_output(self):
+        self._export_output_text(self.txt_vectores, "vectores_resultado.txt")
+        
+    # Métodos envoltura para la PESTAÑA MATRICES
+    def _copy_matrix_output(self):
+        self._copy_output_text(self.txt_matrices)
+
+    def _export_matrix_output(self):
+        self._export_output_text(self.txt_matrices, "matrices_resultado.txt")
+    # ------------------------------------
+    
     def _init_style(self):
         style = ttk.Style()
         try:
@@ -848,6 +1194,8 @@ class AlgebraLinealGUI(ttk.Frame):
         self._build_matrices_tab()
         self._build_vectores_tab()
         self._build_matrices_operations_tab()
+        self._build_global_matrices_tab()        # NUEVO
+        self._build_determinante_inversa_tab()   # NUEVO
     
     def _build_matrices_tab(self):
         matrices_frame = ttk.Frame(self.notebook)
@@ -1094,581 +1442,312 @@ class AlgebraLinealGUI(ttk.Frame):
         self.var_mat_b_n.set(3)
         self._render_matrix_grid(3, 3, 3, 3)
 
-    # ---------- Helpers de UI ----------
-    def _on_canvas_resize(self, event):
-        self.canvas.itemconfigure(self.canvas_window, width=event.width)
-    
-    def _on_vector_canvas_resize(self, event):
-        self.vector_canvas.itemconfigure(self.vector_canvas_window, width=event.width)
-    
-    def _on_matrix_canvas_resize(self, event):
-        self.matrix_canvas.itemconfigure(self.matrix_canvas_window, width=event.width)
+    # ------------------------------------
+    # NUEVA PESTAÑA: Determinante e Inversa
+    # ------------------------------------
+    def _build_determinante_inversa_tab(self):
+        det_frame = ttk.Frame(self.notebook)
+        self.notebook.add(det_frame, text="Det. e Inversa")
+        
+        main_frame = ttk.Frame(det_frame)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(2, weight=1)
+        
+        # Input y Operaciones
+        input_frame = ttk.Frame(main_frame, style="Card.TFrame")
+        input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        input_inner = ttk.Frame(input_frame)
+        input_inner.pack(fill=tk.X, padx=10, pady=8)
 
-    def _validate_int(self, new_value: str) -> bool:
-        if new_value == "":
-            return True
+        ttk.Label(input_inner, text="Seleccionar Matriz Global (A):").pack(side=tk.LEFT, padx=(0, 8))
+        self.var_det_matrix = tk.StringVar(value=self.global_matrix_names[0])
+        self.cb_det_matrix = ttk.Combobox(input_inner, textvariable=self.var_det_matrix, 
+                                        values=self.global_matrix_names, state="readonly", width=8)
+        self.cb_det_matrix.pack(side=tk.LEFT, padx=(0, 20))
+
+        ttk.Button(input_inner, text="Calcular Determinante", command=self._calculate_determinant).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(input_inner, text="Calcular Inversa (A⁻¹)", command=self._calculate_inverse).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(input_inner, text="Regla de Cramer (3x3)", command=self._cramer_rule).pack(side=tk.LEFT) # NUEVO: Cramer
+
+        # Propiedades del Determinante
+        prop_frame = ttk.Frame(main_frame, style="Card.TFrame")
+        prop_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        prop_inner = ttk.Frame(prop_frame)
+        prop_inner.pack(fill=tk.X, padx=10, pady=8)
+        
+        ttk.Label(prop_inner, text="Propiedades (Teoremas):").pack(anchor="w", pady=(0, 4))
+        
+        prop_buttons = ttk.Frame(prop_inner)
+        prop_buttons.pack(fill=tk.X)
+        
+        propiedades = [
+            ("Fila Cero", "cero_fila_col"), 
+            ("Filas Iguales", "filas_iguales"),
+            ("Intercambio Filas", "intercambio"), 
+            ("Mult. Escalar Fila", "multiplicacion_fila"),
+            ("det(AB)=det(A)det(B)", "propiedad_mult")
+        ]
+        
+        for text, value in propiedades:
+            btn = ttk.Button(prop_buttons, text=text, command=lambda v=value: self._show_determinant_property(v))
+            btn.pack(side=tk.LEFT, padx=(4, 0))
+
+        # Output
+        out_frame = ttk.Frame(main_frame, style="Card.TFrame")
+        out_frame.grid(row=2, column=0, sticky="nsew")
+        out_inner = ttk.Frame(out_frame)
+        out_inner.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+        out_inner.columnconfigure(0, weight=1)
+        out_inner.rowconfigure(1, weight=1)
+
+        ttk.Label(out_inner, text="Resultados de Determinante / Inversa", style="Header.TLabel").grid(row=0, column=0, sticky="w")
+        self.txt_det = tk.Text(out_inner, wrap="word", font=("Consolas", 10))
+        self.txt_det.grid(row=1, column=0, sticky="nsew", pady=(4,0))
+
+        btns_det = ttk.Frame(out_inner)
+        btns_det.grid(row=2, column=0, sticky="e", pady=(6,0))
+        ttk.Button(btns_det, text="Copiar resultado", command=lambda: self._copy_output_text(self.txt_det)).pack(side=tk.LEFT)
+        ttk.Button(btns_det, text="Exportar", command=lambda: self._export_output_text(self.txt_det, "det_inversa_resultado.txt")).pack(side=tk.LEFT, padx=(8,0)) 
+
+    # Manejadores para la pestaña Det. e Inversa
+    def _calculate_determinant(self):
         try:
-            v = int(new_value)
-            return 1 <= v <= 99
-        except ValueError:
-            return False
+            matriz_a = self._get_global_matrix(self.var_det_matrix.get())
+            if not matriz_a.es_cuadrada():
+                messagebox.showerror("Error", "La matriz seleccionada no es cuadrada para calcular el determinante.")
+                return
 
-    def _status(self, text: str):
-        self.status.config(text=text)
+            resultado = OperacionesMatriciales.calcular_determinante(matriz_a)
+            self.txt_det.delete("1.0", tk.END)
+            self.txt_det.insert(tk.END, resultado)
+            self._status("Determinante calculado.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en el cálculo del determinante.")
 
-    # ---------- Render de grid ----------
-    def _render_grid(self, m: int, n: int):
-        for child in self.grid_frame.winfo_children():
-            child.destroy()
-        self.entries: List[List[ttk.Entry]] = []
+    def _calculate_inverse(self):
+        try:
+            matriz_a = self._get_global_matrix(self.var_det_matrix.get())
+            if not matriz_a.es_cuadrada():
+                messagebox.showerror("Error", "La matriz seleccionada no es cuadrada para calcular la inversa.")
+                return
 
-        for j in range(n):
-            ttk.Label(self.grid_frame, text=f"x{j+1}").grid(row=0, column=j, padx=4, pady=4)
-        ttk.Label(self.grid_frame, text="| b").grid(row=0, column=n, padx=4, pady=4)
+            resultado = OperacionesMatriciales.calcular_inversa(matriz_a)
+            self.txt_det.delete("1.0", tk.END)
+            self.txt_det.insert(tk.END, resultado)
+            self._status("Matriz inversa calculada.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en el cálculo de la inversa.")
+            
+    def _cramer_rule(self):
+        try:
+            matriz_sel = self._get_global_matrix(self.var_det_matrix.get())
+            if matriz_sel.m != 3 or matriz_sel.n != 4:
+                messagebox.showerror("Error", "Cramer requiere una matriz aumentada 3x4. Verifique la matriz seleccionada.")
+                return
 
+            resultado = OperacionesMatriciales.regla_cramer_3x3(matriz_sel.filas)
+            self.txt_det.delete("1.0", tk.END)
+            self.txt_det.insert(tk.END, resultado)
+            self._status("Regla de Cramer 3x3 aplicada.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error al aplicar Cramer.")
+
+
+    def _show_determinant_property(self, propiedad: str):
+        resultado = OperacionesMatriciales._verificar_propiedad_teorema(propiedad)
+        self.txt_det.delete("1.0", tk.END)
+        self.txt_det.insert(tk.END, f"=== Propiedad de Determinantes ===\n\n{resultado}")
+        self._status("Propiedad de determinante mostrada.")
+    
+    # ------------------------------------
+    # NUEVA PESTAÑA: Matrices Globales
+    # ------------------------------------
+    def _build_global_matrices_tab(self):
+        global_frame = ttk.Frame(self.notebook)
+        self.notebook.add(global_frame, text="Matrices Globales")
+        
+        self.global_matrix_tab_frames: Dict[str, ttk.Frame] = {}
+        
+        self.global_canvas = tk.Canvas(global_frame, highlightthickness=0)
+        self.global_scroll = ttk.Scrollbar(global_frame, orient="vertical", command=self.global_canvas.yview)
+        self.global_canvas.configure(yscrollcommand=self.global_scroll.set)
+        
+        self.global_content_frame = ttk.Frame(self.global_canvas)
+        self.global_content_frame.bind("<Configure>", lambda e: self.global_canvas.configure(scrollregion=self.global_canvas.bbox("all")))
+        self.global_canvas_window = self.global_canvas.create_window((0, 0), window=self.global_content_frame, anchor="nw")
+        
+        self.global_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.global_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.global_canvas.bind("<Configure>", self._on_global_canvas_resize)
+
+        for name in self.global_matrix_names:
+            # Inicializar las dimensiones por defecto antes de renderizar
+            self.global_matrix_dims.setdefault(name, (tk.IntVar(value=3), tk.IntVar(value=3)))
+            self._render_global_matrix_input(name, 3, 3)
+
+    def _on_global_canvas_resize(self, event):
+        self.global_canvas.itemconfigure(self.global_canvas_window, width=event.width)
+
+    def _render_global_matrix_input(self, name: str, m: int, n: int):
+        # Destruir frame anterior si existe
+        if name in self.global_matrix_tab_frames and self.global_matrix_tab_frames[name].winfo_exists():
+            self.global_matrix_tab_frames[name].destroy()
+
+        card_frame = ttk.Frame(self.global_content_frame, style="Card.TFrame")
+        card_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.global_matrix_tab_frames[name] = card_frame
+        
+        inner_frame = ttk.Frame(card_frame)
+        inner_frame.pack(fill=tk.X, padx=10, pady=8)
+        
+        # Título y Controles
+        ttk.Label(inner_frame, text=f"Matriz {name} ({m}×{n})", style="Header.TLabel").pack(side=tk.LEFT, pady=(0, 6))
+
+        cfg_frame = ttk.Frame(inner_frame)
+        cfg_frame.pack(side=tk.RIGHT)
+        
+        var_m, var_n = self.global_matrix_dims[name]
+        
+        vcmd = (self.register(self._validate_int), "%P")
+        
+        ttk.Label(cfg_frame, text="F:").pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Spinbox(cfg_frame, from_=1, to=8, width=4, textvariable=var_m, validate="key", validatecommand=vcmd, 
+                    command=lambda name=name: self._apply_global_matrix_size(name)).pack(side=tk.LEFT)
+        ttk.Label(cfg_frame, text="C:").pack(side=tk.LEFT, padx=(6, 2))
+        ttk.Spinbox(cfg_frame, from_=1, to=8, width=4, textvariable=var_n, validate="key", validatecommand=vcmd, 
+                    command=lambda name=name: self._apply_global_matrix_size(name)).pack(side=tk.LEFT)
+        ttk.Button(cfg_frame, text="Guardar", command=lambda name=name: self._save_global_matrix(name)).pack(side=tk.LEFT, padx=(8,0))
+        ttk.Button(cfg_frame, text="Ejemplo (3x3)", command=lambda name=name: self._load_global_example(name)).pack(side=tk.LEFT, padx=(4,0))
+        
+        # Grid de entradas
+        grid_frame = ttk.Frame(card_frame)
+        grid_frame.pack(padx=10, pady=(0, 10))
+        
         vcmd_num = (self.register(self._validate_number), "%P")
+        entries = []
         for i in range(m):
             fila_entries: List[ttk.Entry] = []
-            for j in range(n + 1):
-                e = ttk.Entry(self.grid_frame, width=10, justify="center", validate="key", validatecommand=vcmd_num)
+            for j in range(n):
+                e = ttk.Entry(grid_frame, width=8, justify="center", validate="key", validatecommand=vcmd_num)
                 e.grid(row=i + 1, column=j, padx=3, pady=3)
-                e.insert(0, "0")
+                # Intenta mantener valores si es un redibujo
+                if name in self.global_matrix_entries and i < len(self.global_matrix_entries[name]) and j < len(self.global_matrix_entries[name][i]):
+                     e.insert(0, self.global_matrix_entries[name][i][j].get())
+                else:
+                     e.insert(0, "0")
                 fila_entries.append(e)
-            self.entries.append(fila_entries)
+            entries.append(fila_entries)
+        self.global_matrix_entries[name] = entries
 
-        for j in range(n + 1):
-            self.grid_frame.columnconfigure(j, weight=1)
+    def _apply_global_matrix_size(self, name: str):
+        var_m, var_n = self.global_matrix_dims[name]
+        m = max(1, int(var_m.get() or 1))
+        n = max(1, int(var_n.get() or 1))
+        self._render_global_matrix_input(name, m, n)
+        self.global_canvas.update_idletasks()
+        self.global_canvas.config(scrollregion=self.global_canvas.bbox("all"))
+        self._status(f"Tamaño de {name} {m}×{n} redibujado.")
 
-        self.var_m.set(m); self.var_n.set(n)
-
-    def _validate_number(self, new_value: str) -> bool:
-        if new_value == "" or new_value == "-" or new_value == ".":
-            return True
-        try:
-            float(new_value.replace(",", "."))
-            return True
-        except ValueError:
-            return False
-
-    # ---------- Acciones ----------
-    def _apply_size(self):
-        m = max(1, int(self.var_m.get() or 1))
-        n = max(1, int(self.var_n.get() or 1))
-        self._render_grid(m, n)
-        self._status(f"Tamaño matriz {m}×{n} creado.")
-
-    def _read_matrix(self) -> List[List[float]]:
+    def _read_global_matrix_entries(self, name: str) -> List[List[float]]:
+        var_m, var_n = self.global_matrix_dims[name]
+        m, n = var_m.get(), var_n.get()
+        entries = self.global_matrix_entries[name]
+        
         mat: List[List[float]] = []
-        for i in range(int(self.var_m.get())):
+        for i in range(m):
             fila = []
-            for j in range(int(self.var_n.get()) + 1):
-                val = self.entries[i][j].get().strip().replace(",", ".")
+            for j in range(n):
+                val = entries[i][j].get().strip().replace(",", ".")
                 if val in ("", "-", "."):
-                    raise ValueError("Hay celdas vacías o con un número incompleto.")
+                    raise ValueError(f"Matriz {name}[{i+1},{j+1}] tiene valor vacío o incompleto.")
                 fila.append(float(val))
             mat.append(fila)
         return mat
 
-    def _solve(self):
+    def _save_global_matrix(self, name: str):
         try:
-            matriz = self._read_matrix()
+            filas = self._read_global_matrix_entries(name)
+            matriz = Matriz(filas)
+            self.global_matrices[name] = matriz
+            self._status(f"Matriz {name} ({matriz.m}×{matriz.n}) guardada globalmente.")
         except Exception as e:
-            messagebox.showerror("Error de entrada", str(e))
-            self._status("Corrige los datos y vuelve a intentar.")
-            return
+            messagebox.showerror("Error de guardado", f"No se pudo guardar {name}: {e}")
+            self._status(f"Error al guardar {name}.")
 
-        sistema = SistemaLineal(matriz)
-        salida = "=== Resolviendo por Eliminación Gaussiana ===\n\n" + sistema.eliminacion_gaussiana()
-        self.txt.delete("1.0", tk.END)
-        self.txt.insert(tk.END, salida)
-        self._status("Cálculo finalizado.")
+    def _get_global_matrix(self, name: str) -> Matriz:
+        """Obtiene la matriz guardada, o intenta leerla de la UI si no está guardada (para operaciones rápidas)."""
+        if name in self.global_matrices:
+            return self.global_matrices[name]
+        
+        # Fallback: leer directamente de la UI si existe
+        try:
+            filas = self._read_global_matrix_entries(name)
+            # Guardarla después de leerla para futuras operaciones
+            matriz = Matriz(filas)
+            self.global_matrices[name] = matriz
+            return matriz
+        except Exception as e:
+            raise ValueError(f"Matriz {name} no está guardada o contiene errores de entrada: {e}")
+            
+    def _load_global_example(self, name: str):
+        """Carga un ejemplo de matriz 3x3 en un slot global."""
+        datos_ejemplo = [
+            [1, 2, 3],
+            [4, 5, 6],
+            [7, 8, 9]
+        ]
+        m, n = 3, 3
+        
+        self.global_matrix_dims[name][0].set(m)
+        self.global_matrix_dims[name][1].set(n)
+        self._render_global_matrix_input(name, m, n) # Redibuja
+        
+        entries = self.global_matrix_entries[name]
+        for i in range(m):
+            for j in range(n):
+                e = entries[i][j]
+                e.delete(0, tk.END)
+                e.insert(0, str(datos_ejemplo[i][j]))
+        
+        self._save_global_matrix(name) # Guardar en el diccionario global
+        self._status(f"Ejemplo 3×3 cargado y guardado en {name}.")
 
     def _clear_all(self):
+        # Limpiar pestaña Sistemas Lineales
         for fila in getattr(self, 'entries', []):
             for e in fila:
                 e.delete(0, tk.END); e.insert(0, "0")
-        self.txt.delete("1.0", tk.END)
-        self._status("Campos limpiados.")
+        if hasattr(self, 'txt'):
+            self.txt.delete("1.0", tk.END)
+            
+        # Limpiar pestaña Vectores (opcional, podrías tener botones separados)
+        if hasattr(self, '_clear_vectors'):
+            self._clear_vectors() # Llama al método específico si existe
 
-    def _load_example(self):
-        self._render_grid(3, 3)
-        datos = [
-            [2, 1, -1, 8],
-            [-3, -1, 2, -11],
-            [-2, 1, 2, -3],
-        ]
-        for i in range(3):
-            for j in range(4):
-                e = self.entries[i][j]
-                e.delete(0, tk.END)
-                e.insert(0, str(datos[i][j]))
-        self._status("Ejemplo cargado (3×3).")
+        # Limpiar pestaña Matrices (opcional, podrías tener botones separados)
+        if hasattr(self, '_clear_matrices'):
+            self._clear_matrices() # Llama al método específico si existe
+            
+        # Limpiar pestaña Det/Inversa (opcional)
+        if hasattr(self, 'txt_det'):
+             self.txt_det.delete("1.0", tk.END)
 
-    def _export(self):
-        contenido = self.txt.get("1.0", tk.END).strip()
-        if not contenido:
-            messagebox.showinfo("Exportar", "No hay contenido para exportar.")
-            return
-        ruta = filedialog.asksaveasfilename(
-            title="Guardar pasos",
-            defaultextension=".txt",
-            filetypes=[("Texto", "*.txt"), ("Todos", "*.*")],
-            initialfile="gauss_pasos.txt",
-        )
-        if ruta:
-            try:
-                with open(ruta, "w", encoding="utf-8") as f:
-                    f.write(contenido)
-                messagebox.showinfo("Exportar", f"Archivo guardado en:\n{ruta}")
-                self._status("Pasos exportados.")
-            except Exception as e:
-                messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
+        self._status("Todos los campos limpiados.")
 
-    def _copy_output(self):
-        contenido = self.txt.get("1.0", tk.END)
-        if not contenido.strip():
-            messagebox.showinfo("Copiar", "No hay contenido para copiar.")
-            return
-        self.master.clipboard_clear(); self.master.clipboard_append(contenido)
-        self._status("Resultado copiado.")
-
+       
     def _about(self):
         messagebox.showinfo(
             "Acerca de",
             "Calculadora de Álgebra Lineal\n"
             "Sistemas lineales, vectores y matrices\n"
+            "Determinante, Inversa y Propiedades\n" # Added details
             "Tkinter — sin librerías externas\n"
             "Atajos: Ctrl+S exportar, Ctrl+C copiar, Ctrl+L limpiar"
         )
-    
-    # ---------- Métodos para vectores ----------
-    def _render_vector_grid(self, dimension: int, num_vectores: int):
-        for child in self.vector_frame.winfo_children():
-            child.destroy()
-        self.vector_entries: List[List[ttk.Entry]] = []
-        
-        for j in range(dimension):
-            ttk.Label(self.vector_frame, text=f"x{j+1}").grid(row=0, column=j+1, padx=4, pady=4)
-        
-        vcmd_num = (self.register(self._validate_number), "%P")
-        for i in range(num_vectores):
-            ttk.Label(self.vector_frame, text=f"v{i+1}").grid(row=i+1, column=0, padx=4, pady=4)
-            fila_entries: List[ttk.Entry] = []
-            for j in range(dimension):
-                e = ttk.Entry(self.vector_frame, width=10, justify="center", validate="key", validatecommand=vcmd_num)
-                e.grid(row=i+1, column=j+1, padx=3, pady=3)
-                e.insert(0, "0")
-                fila_entries.append(e)
-            self.vector_entries.append(fila_entries)
-        
-        for j in range(dimension + 1):
-            self.vector_frame.columnconfigure(j, weight=1)
-    
-    def _apply_vector_size(self):
-        dim = max(2, int(self.var_dimension.get() or 2))
-        num = max(1, int(self.var_num_vectores.get() or 1))
-        self._render_vector_grid(dim, num)
-        self._status(f"Vectores {num}×{dim} creados.")
-    
-    def _read_vectors(self) -> List[Vector]:
-        vectores = []
-        dim = int(self.var_dimension.get())
-        num = int(self.var_num_vectores.get())
-        
-        for i in range(num):
-            componentes = []
-            for j in range(dim):
-                val = self.vector_entries[i][j].get().strip().replace(",", ".")
-                if val in ("", "-", "."):
-                    raise ValueError(f"Vector v{i+1} tiene componentes vacías o incompletas.")
-                componentes.append(float(val))
-            vectores.append(Vector(componentes))
-        
-        return vectores
-    
-    def _verify_properties(self):
-        try:
-            vectores = self._read_vectors()
-            resultado = OperacionesVectoriales.verificar_propiedades_espacio_vectorial(vectores)
-            self.txt_vectores.delete("1.0", tk.END)
-            self.txt_vectores.insert(tk.END, resultado)
-            self._status("Verificación de propiedades completada.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            self._status("Error en verificación de propiedades.")
-    
-    def _linear_combination(self):
-        try:
-            vectores = self._read_vectors()
-            if len(vectores) < 2:
-                messagebox.showwarning("Advertencia", "Se necesitan al menos 2 vectores para combinación lineal.")
-                return
-            
-            dim = vectores[0].dimension
-            vector_objetivo = self._get_vector_objetivo(dim)
-            if vector_objetivo is None:
-                return
-            
-            resultado = OperacionesVectoriales.combinacion_lineal(vectores, vector_objetivo)
-            self.txt_vectores.delete("1.0", tk.END)
-            self.txt_vectores.insert(tk.END, resultado)
-            self._status("Combinación lineal calculada.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            self._status("Error en combinación lineal.")
-    
-    def _vector_equation(self):
-        try:
-            vectores = self._read_vectors()
-            if len(vectores) < 2:
-                messagebox.showwarning("Advertencia", "Se necesitan al menos 2 vectores para ecuación vectorial.")
-                return
-            
-            dim = vectores[0].dimension
-            vector_objetivo = self._get_vector_objetivo(dim)
-            if vector_objetivo is None:
-                return
-            
-            resultado = OperacionesVectoriales.ecuacion_vectorial(vectores, vector_objetivo)
-            self.txt_vectores.delete("1.0", tk.END)
-            self.txt_vectores.insert(tk.END, resultado)
-            self._status("Ecuación vectorial resuelta.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            self._status("Error en ecuación vectorial.")
-    
-    def _get_vector_objetivo(self, dimension: int) -> Vector:
-        dialog = tk.Toplevel(self.master)
-        dialog.title("Vector objetivo")
-        dialog.geometry("400x200")
-        dialog.transient(self.master)
-        dialog.grab_set()
-        
-        resultado = [None]
-        
-        ttk.Label(dialog, text=f"Ingrese el vector objetivo ({dimension} componentes):", font=("Segoe UI", 10, "bold")).pack(pady=10)
-        
-        frame_entries = ttk.Frame(dialog)
-        frame_entries.pack(pady=10)
-        
-        entries = []
-        for i in range(dimension):
-            ttk.Label(frame_entries, text=f"x{i+1}:").grid(row=0, column=i, padx=5)
-            e = ttk.Entry(frame_entries, width=8, justify="center")
-            e.grid(row=1, column=i, padx=5)
-            e.insert(0, "0")
-            entries.append(e)
-        
-        def ok_clicked():
-            try:
-                componentes = []
-                for e in entries:
-                    val = e.get().strip().replace(",", ".")
-                    if val in ("", "-", "."):
-                        raise ValueError("Componentes vacías o incompletas.")
-                    componentes.append(float(val))
-                resultado[0] = Vector(componentes)
-                dialog.destroy()
-            except Exception as e:
-                messagebox.showerror("Error", str(e))
-        
-        def cancel_clicked():
-            dialog.destroy()
-        
-        frame_buttons = ttk.Frame(dialog)
-        frame_buttons.pack(pady=20)
-        ttk.Button(frame_buttons, text="Aceptar", command=ok_clicked).pack(side=tk.LEFT, padx=10)
-        ttk.Button(frame_buttons, text="Cancelar", command=cancel_clicked).pack(side=tk.LEFT, padx=10)
-        
-        dialog.wait_window()
-        return resultado[0]
-    
-    def _load_vector_example(self):
-        self._render_vector_grid(3, 3)
-        datos = [
-            [1, 2, 3],
-            [2, 1, 1],
-            [3, 3, 4]
-        ]
-        for i in range(3):
-            for j in range(3):
-                e = self.vector_entries[i][j]
-                e.delete(0, tk.END)
-                e.insert(0, str(datos[i][j]))
-        self._status("Ejemplo de vectores cargado (3×3).")
-    
-    def _clear_vectors(self):
-        for fila in getattr(self, 'vector_entries', []):
-            for e in fila:
-                e.delete(0, tk.END)
-                e.insert(0, "0")
-        self.txt_vectores.delete("1.0", tk.END)
-        self._status("Campos de vectores limpiados.")
-    
-    def _copy_vector_output(self):
-        contenido = self.txt_vectores.get("1.0", tk.END)
-        if not contenido.strip():
-            messagebox.showinfo("Copiar", "No hay contenido para copiar.")
-            return
-        self.master.clipboard_clear()
-        self.master.clipboard_append(contenido)
-        self._status("Resultado de vectores copiado.")
-    
-    def _export_vector_output(self):
-        contenido = self.txt_vectores.get("1.0", tk.END).strip()
-        if not contenido:
-            messagebox.showinfo("Exportar", "No hay contenido para exportar.")
-            return
-        ruta = filedialog.asksaveasfilename(
-            title="Guardar resultado de vectores",
-            defaultextension=".txt",
-            filetypes=[("Texto", "*.txt"), ("Todos", "*.*")],
-            initialfile="vectores_resultado.txt",
-        )
-        if ruta:
-            try:
-                with open(ruta, "w", encoding="utf-8") as f:
-                    f.write(contenido)
-                messagebox.showinfo("Exportar", f"Archivo guardado en:\n{ruta}")
-                self._status("Resultado de vectores exportado.")
-            except Exception as e:
-                messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
-    
-    def _solve_vectors(self):
-        self._verify_properties()
-    
-    # ---------- Métodos para matrices ----------
-    def _render_matrix_grid(self, ma: int, na: int, mb: int, nb: int):
-        for child in self.matrix_frame.winfo_children():
-            child.destroy()
-        self.matrix_a_entries: List[List[ttk.Entry]] = []
-        self.matrix_b_entries: List[List[ttk.Entry]] = []
-        
-        ttk.Label(self.matrix_frame, text="Matriz A", style="Header.TLabel").grid(row=0, column=0, columnspan=na, pady=(0,10))
-        
-        for j in range(na):
-            ttk.Label(self.matrix_frame, text=f"Col {j+1}").grid(row=1, column=j+1, padx=4, pady=4)
-        
-        vcmd_num = (self.register(self._validate_number), "%P")
-        for i in range(ma):
-            ttk.Label(self.matrix_frame, text=f"Fila {i+1}").grid(row=i+2, column=0, padx=4, pady=4)
-            fila_entries: List[ttk.Entry] = []
-            for j in range(na):
-                e = ttk.Entry(self.matrix_frame, width=8, justify="center", validate="key", validatecommand=vcmd_num)
-                e.grid(row=i+2, column=j+1, padx=3, pady=3)
-                e.insert(0, "0")
-                fila_entries.append(e)
-            self.matrix_a_entries.append(fila_entries)
-        
-        ttk.Separator(self.matrix_frame, orient="horizontal").grid(row=ma+2, column=0, columnspan=na+1, sticky="ew", pady=20)
-        
-        ttk.Label(self.matrix_frame, text="Matriz B", style="Header.TLabel").grid(row=ma+3, column=0, columnspan=nb, pady=(0,10))
-        
-        for j in range(nb):
-            ttk.Label(self.matrix_frame, text=f"Col {j+1}").grid(row=ma+4, column=j+1, padx=4, pady=4)
-        
-        for i in range(mb):
-            ttk.Label(self.matrix_frame, text=f"Fila {i+1}").grid(row=ma+5+i, column=0, padx=4, pady=4)
-            fila_entries: List[ttk.Entry] = []
-            for j in range(nb):
-                e = ttk.Entry(self.matrix_frame, width=8, justify="center", validate="key", validatecommand=vcmd_num)
-                e.grid(row=ma+5+i, column=j+1, padx=3, pady=3)
-                e.insert(0, "0")
-                fila_entries.append(e)
-            self.matrix_b_entries.append(fila_entries)
-        
-        for j in range(max(na, nb) + 1):
-            self.matrix_frame.columnconfigure(j, weight=1)
-    
-    def _apply_matrix_size(self):
-        ma = max(1, int(self.var_mat_a_m.get() or 1))
-        na = max(1, int(self.var_mat_a_n.get() or 1))
-        mb = max(1, int(self.var_mat_b_m.get() or 1))
-        nb = max(1, int(self.var_mat_b_n.get() or 1))
-        self._render_matrix_grid(ma, na, mb, nb)
-        self._status(f"Matrices A({ma}×{na}) y B({mb}×{nb}) creadas.")
-    
-    def _read_matrices(self) -> tuple[Matriz, Matriz]:
-        ma = int(self.var_mat_a_m.get())
-        na = int(self.var_mat_a_n.get())
-        mb = int(self.var_mat_b_m.get())
-        nb = int(self.var_mat_b_n.get())
-        
-        filas_a = []
-        for i in range(ma):
-            fila = []
-            for j in range(na):
-                val = self.matrix_a_entries[i][j].get().strip().replace(",", ".")
-                if val in ("", "-", "."):
-                    raise ValueError(f"Matriz A[{i+1},{j+1}] tiene valor vacío o incompleto.")
-                fila.append(float(val))
-            filas_a.append(fila)
-        
-        filas_b = []
-        for i in range(mb):
-            fila = []
-            for j in range(nb):
-                val = self.matrix_b_entries[i][j].get().strip().replace(",", ".")
-                if val in ("", "-", "."):
-                    raise ValueError(f"Matriz B[{i+1},{j+1}] tiene valor vacío o incompleto.")
-                fila.append(float(val))
-            filas_b.append(fila)
-        
-        return Matriz(filas_a), Matriz(filas_b)
-    
-    def _matrix_equation(self):
-        try:
-            matriz_a, matriz_b = self._read_matrices()
-            resultado = OperacionesMatriciales.ecuacion_matricial(matriz_a, matriz_b)
-            self.txt_matrices.delete("1.0", tk.END)
-            self.txt_matrices.insert(tk.END, resultado)
-            self._status("Ecuación matricial AX=B resuelta.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            self._status("Error en ecuación matricial.")
-    
-    def _multiply_matrices(self):
-        try:
-            matriz_a, matriz_b = self._read_matrices()
-            resultado = OperacionesMatriciales.multiplicacion_matrices(matriz_a, matriz_b)
-            self.txt_matrices.delete("1.0", tk.END)
-            self.txt_matrices.insert(tk.END, resultado)
-            self._status("Multiplicación de matrices completada.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            self._status("Error en multiplicación de matrices.")
-
-    def _sum_matrices(self):
-        try:
-            matriz_a, matriz_b = self._read_matrices()
-            resultado = OperacionesMatriciales.suma_matrices(matriz_a, matriz_b)
-            self.txt_matrices.delete("1.0", tk.END)
-            self.txt_matrices.insert(tk.END, resultado)
-            self._status("Suma de matrices completada.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            self._status("Error en la suma de matrices.")
-
-    def _subtract_matrices(self):
-        try:
-            matriz_a, matriz_b = self._read_matrices()
-            resultado = OperacionesMatriciales.resta_matrices(matriz_a, matriz_b)
-            self.txt_matrices.delete("1.0", tk.END)
-            self.txt_matrices.insert(tk.END, resultado)
-            self._status("Resta de matrices completada.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            self._status("Error en la resta de matrices.")
-
-    def _multiply_by_scalar(self):
-        try:
-            escalar = simpledialog.askfloat("Entrada de escalar", "Ingrese el valor del escalar:", parent=self.master)
-            if escalar is None:
-                return
-
-            matriz_a, _ = self._read_matrices()
-            resultado = OperacionesMatriciales.multiplicacion_por_escalar(matriz_a, escalar)
-            self.txt_matrices.delete("1.0", tk.END)
-            self.txt_matrices.insert(tk.END, resultado)
-            self._status("Multiplicación por escalar completada.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            self._status("Error en la multiplicación por escalar.")
-
-    def _transpose_matrix(self):
-        try:
-            matriz_a, _ = self._read_matrices()
-            resultado = OperacionesMatriciales.matriz_traspuesta(matriz_a)
-            self.txt_matrices.delete("1.0", tk.END)
-            self.txt_matrices.insert(tk.END, resultado)
-            self._status("Cálculo de la traspuesta completado.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            self._status("Error en el cálculo de la traspuesta.")
-
-    def _verify_transpose_sum_property(self):
-        """Verifica la propiedad (A+B)^T = A^T + B^T"""
-        try:
-            matriz_a, matriz_b = self._read_matrices()
-            resultado = OperacionesMatriciales.verificar_propiedad_suma_traspuesta(matriz_a, matriz_b)
-            self.txt_matrices.delete("1.0", tk.END)
-            self.txt_matrices.insert(tk.END, resultado)
-            self._status("Verificación de propiedad completada.")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            self._status("Error durante la verificación.")
-
-    def _solve_matrices(self):
-        self._matrix_equation()
-    
-    def _load_matrix_example(self):
-        self._render_matrix_grid(3, 3, 3, 2)
-        
-        datos_a = [
-            [1, 2, 3],
-            [2, 1, 1],
-            [3, 3, 4]
-        ]
-        for i in range(3):
-            for j in range(3):
-                e = self.matrix_a_entries[i][j]
-                e.delete(0, tk.END)
-                e.insert(0, str(datos_a[i][j]))
-        
-        datos_b = [
-            [1, 2],
-            [3, 4],
-            [5, 6]
-        ]
-        for i in range(3):
-            for j in range(2):
-                e = self.matrix_b_entries[i][j]
-                e.delete(0, tk.END)
-                e.insert(0, str(datos_b[i][j]))
-        
-        self._status("Ejemplo de matrices cargado (A: 3×3, B: 3×2).")
-    
-    def _clear_matrices(self):
-        for fila in getattr(self, 'matrix_a_entries', []):
-            for e in fila:
-                e.delete(0, tk.END)
-                e.insert(0, "0")
-        for fila in getattr(self, 'matrix_b_entries', []):
-            for e in fila:
-                e.delete(0, tk.END)
-                e.insert(0, "0")
-        self.txt_matrices.delete("1.0", tk.END)
-        self._status("Campos de matrices limpiados.")
-    
-    def _copy_matrix_output(self):
-        contenido = self.txt_matrices.get("1.0", tk.END)
-        if not contenido.strip():
-            messagebox.showinfo("Copiar", "No hay contenido para copiar.")
-            return
-        self.master.clipboard_clear()
-        self.master.clipboard_append(contenido)
-        self._status("Resultado de matrices copiado.")
-    
-    def _export_matrix_output(self):
-        contenido = self.txt_matrices.get("1.0", tk.END).strip()
-        if not contenido:
-            messagebox.showinfo("Exportar", "No hay contenido para exportar.")
-            return
-        ruta = filedialog.asksaveasfilename(
-            title="Guardar resultado de matrices",
-            defaultextension=".txt",
-            filetypes=[("Texto", "*.txt"), ("Todos", "*.*")],
-            initialfile="matrices_resultado.txt",
-        )
-        if ruta:
-            try:
-                with open(ruta, "w", encoding="utf-8") as f:
-                    f.write(contenido)
-                messagebox.showinfo("Exportar", f"Archivo guardado en:\n{ruta}")
-                self._status("Resultado de matrices exportado.")
-            except Exception as e:
-                messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
-
 
 if __name__ == "__main__":
     root = tk.Tk()
