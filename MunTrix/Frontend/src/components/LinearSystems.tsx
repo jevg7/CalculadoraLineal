@@ -262,3 +262,4 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
     </div>
   );
 }
+}
