@@ -1,913 +1,36 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, simpledialog
-from typing import List
-
-"""
-Aplicación de una sola pieza (NO modular) con interfaz cuidada en Tkinter.
-- Sin librerías externas (solo tkinter/ttk de la librería estándar).
-- Calcula sistemas lineales por Eliminación Gaussiana con pivoteo parcial.
-- Operaciones con vectores: suma, multiplicación por escalar, combinación lineal.
-- Ecuaciones vectoriales y matriciales.
-- UI con pestañas, validación de entradas, ayuda, exportar y copiar.
-
-Ejecuta:  python matriz_e_interfaz.py
-"""
-
-# ============================
-# Núcleo de cálculo (modelo)
-# ============================
-class SistemaLineal:
-    def __init__(self, matriz_aumentada: List[List[float]]):
-        self.matriz = [fila[:] for fila in matriz_aumentada]
-        self.homogeneo = all(abs(fila[-1]) < 1e-12 for fila in self.matriz)
-
-    def _imprimir_matriz(self, paso: int, operacion: str) -> str:
-        texto = f"Paso {paso} ({operacion}):\n"
-        for fila in self.matriz:
-            texto += "  ".join(f"{valor:.4f}" for valor in fila) + "\n"
-        return texto + "\n"
-
-    def eliminacion_gaussiana(self) -> str:
-        if not self.matriz:
-            return "Matriz no válida."
-
-        paso = 1
-        resultado = ""
-        filas, columnas = len(self.matriz), len(self.matriz[0])
-        fila_actual = 0
-
-        for col in range(columnas - 1):
-            if fila_actual >= filas:
-                break
-
-            max_row = max(range(fila_actual, filas), key=lambda i: abs(self.matriz[i][col]))
-            if abs(self.matriz[max_row][col]) < 1e-12:
-                continue
-
-            if fila_actual != max_row:
-                self.matriz[fila_actual], self.matriz[max_row] = self.matriz[max_row], self.matriz[fila_actual]
-                resultado += self._imprimir_matriz(paso, f"Intercambio f{fila_actual + 1} ↔ f{max_row + 1}")
-                paso += 1
-
-            pivote = self.matriz[fila_actual][col]
-
-            if abs(pivote) > 1e-12:
-                self.matriz[fila_actual] = [x / pivote for x in self.matriz[fila_actual]]
-                resultado += self._imprimir_matriz(paso, f"f{fila_actual + 1} ← (1/{pivote:.4f}) · f{fila_actual + 1}")
-                paso += 1
-
-            for i in range(filas):
-                if i != fila_actual:
-                    factor = self.matriz[i][col]
-                    if abs(factor) > 1e-12:
-                        self.matriz[i] = [self.matriz[i][k] - factor * self.matriz[fila_actual][k] for k in range(columnas)]
-                        resultado += self._imprimir_matriz(paso, f"f{i + 1} ← f{i + 1} − ({factor:.4f}) · f{fila_actual + 1}")
-                        paso += 1
-
-            fila_actual += 1
-
-        resultado += self._interpretar_resultado()
-        return resultado
-    
-    def eliminacion_gaussiana_solo_pasos(self) -> str:
-        """Realiza la eliminación Gaussiana (con el mismo log de pasos) sin interpretar solución."""
-        if not self.matriz:
-            return "Matriz no válida."
-
-        paso = 1
-        resultado = ""
-        filas, columnas = len(self.matriz), len(self.matriz[0])
-        fila_actual = 0
-
-        for col in range(columnas - 1):  # ojo: última col es el término independiente
-            if fila_actual >= filas:
-                break
-
-            max_row = max(range(fila_actual, filas), key=lambda i: abs(self.matriz[i][col]))
-            if abs(self.matriz[max_row][col]) < 1e-12:
-                continue
-
-            if fila_actual != max_row:
-                self.matriz[fila_actual], self.matriz[max_row] = self.matriz[max_row], self.matriz[fila_actual]
-                resultado += self._imprimir_matriz(paso, f"Intercambio f{fila_actual + 1} ↔ f{max_row + 1}")
-                paso += 1
-
-            pivote = self.matriz[fila_actual][col]
-
-            if abs(pivote) > 1e-12:
-                self.matriz[fila_actual] = [x / pivote for x in self.matriz[fila_actual]]
-                resultado += self._imprimir_matriz(paso, f"f{fila_actual + 1} ← (1/{pivote:.4f}) · f{fila_actual + 1}")
-                paso += 1
-
-            for i in range(filas):
-                if i != fila_actual:
-                    factor = self.matriz[i][col]
-                    if abs(factor) > 1e-12:
-                        self.matriz[i] = [self.matriz[i][k] - factor * self.matriz[fila_actual][k] for k in range(columnas)]
-                        resultado += self._imprimir_matriz(paso, f"f{i + 1} ← f{i + 1} − ({factor:.4f}) · f{fila_actual + 1}")
-                        paso += 1
-
-            fila_actual += 1
-
-        return resultado
-
-    def _interpretar_resultado(self) -> str:
-        n, m = len(self.matriz), len(self.matriz[0]) - 1
-        pivotes = [-1] * m
-        resultado = "Solución del sistema:\n"
-        soluciones = {}
-        soluciones_numericas = {}
-        columnas_pivote = []
-
-        # === NUEVO: detectar pivotes por "leading 1" de cada fila ===
-        columnas_marcadas = set()
-        for i in range(n):
-            # buscar el primer índice no nulo (leading index) en las columnas de variables
-            j_lead = None
-            for j in range(m):
-                if abs(self.matriz[i][j]) > 1e-10:
-                    j_lead = j
-                    break
-            if j_lead is None:
-                continue  # fila completamente nula en la parte de variables
-
-            # comprobar que en el leading index hay un 1 y que su columna es cero en las demás filas
-            es_uno = abs(self.matriz[i][j_lead] - 1) < 1e-10
-            columna_ceros_fuera = all(abs(self.matriz[k][j_lead]) < 1e-10 for k in range(n) if k != i)
-            # además, para ser leading 1, a la izquierda de j_lead la fila debe ser cero
-            izquierda_ceros = all(abs(self.matriz[i][k]) < 1e-10 for k in range(j_lead))
-
-            if es_uno and columna_ceros_fuera and izquierda_ceros and j_lead not in columnas_marcadas:
-                pivotes[j_lead] = i
-                columnas_pivote.append(j_lead + 1)
-                columnas_marcadas.add(j_lead)
-
-        # --- resto del método sigue igual a partir de aquí ---
-        fila_inconsistente = [
-            i for i, fila in enumerate(self.matriz)
-            if all(abs(val) < 1e-10 for val in fila[:-1]) and abs(fila[-1]) > 1e-10
-        ]
-        inconsistente_var = {f"x{i + 1}" for i in fila_inconsistente}
-
-        for j in range(m):
-            var_name = f"x{j + 1}"
-            if var_name in inconsistente_var:
-                soluciones[var_name] = f"{var_name} es inconsistente"
-            elif pivotes[j] == -1:
-                soluciones[var_name] = f"{var_name} es libre"
-            else:
-                fila = pivotes[j]
-                constante = self.matriz[fila][-1]
-                constante_str = (f"{int(constante)}" if float(constante).is_integer() else f"{constante:.4f}")
-                terminos = []
-                for k in range(m):
-                    if k != j and pivotes[k] == -1 and abs(self.matriz[fila][k]) > 1e-10:
-                        coef = -self.matriz[fila][k]
-                        coef_str = (f"{int(coef)}" if float(coef).is_integer() else f"{coef:.4f}")
-                        terminos.append(f"{'+' if coef >= 0 else ''}{coef_str}x{k + 1}")
-
-                if constante_str == "0" and not terminos:
-                    ecuacion = "0"
-                else:
-                    ecuacion = (constante_str if constante_str != "0" else "")
-                    if terminos:
-                        ecuacion = (ecuacion + " " if ecuacion else "") + " ".join(terminos).lstrip("+ ").strip()
-
-                soluciones[var_name] = f"{var_name} = {ecuacion}".strip()
-
-                if not terminos:
-                    soluciones_numericas[var_name] = constante
-
-        for i in range(m):
-            var_name = f"x{i + 1}"
-            if var_name in soluciones:
-                resultado += f"{soluciones[var_name]}\n"
-
-        rankA = len(columnas_pivote)
-        hay_libres = any(pivote == -1 for pivote in pivotes)
-
-        if fila_inconsistente:
-            resultado += "\nEl sistema es inconsistente y no tiene soluciones.\n"
-        else:
-            if self.homogeneo:
-                if hay_libres:
-                    resultado += (
-                        f"\nSistema homogéneo: hay variables libres ⇒ hay infinitas soluciones (incluye la trivial x = 0).\n"
-                        f"Diagnóstico: rango(A) = {rankA} < n = {m}. "
-                        f"No hay pivote en todas las columnas (no se logra RREF con pivote por columna). "
-                        f"⇒ La solución trivial **no es la única**.\n"
-                    )
-                else:
-                    resultado += "\nSistema homogéneo: la solución es única y trivial (x = 0).\n"
-            else:
-                if hay_libres:
-                    resultado += "\nHay infinitas soluciones debido a variables libres.\n"
-                else:
-                    if len(soluciones_numericas) == m and all(abs(val) < 1e-10 for val in soluciones_numericas.values()):
-                        resultado += "\nSolución trivial.\n"
-                    else:
-                        resultado += "\nLa solución es única.\n"
-
-        resultado += f"\nLas columnas pivote son: {', '.join(map(str, columnas_pivote)) or '—'}.\n"
-        return resultado
-    
-    def columnas_pivote(self, num_vars: int) -> list[int]:
-        """Devuelve las columnas pivote (1-based) entre las primeras num_vars columnas."""
-        n, m_tot = len(self.matriz), len(self.matriz[0])
-        m = min(num_vars, m_tot - 1)  # variables = primeras columnas; última es |b
-        cols = []
-        for i in range(n):
-            lead = None
-            for j in range(m):
-                if abs(self.matriz[i][j]) > 1e-10:
-                    lead = j
-                    break
-            if lead is None:
-                continue
-            if (abs(self.matriz[i][lead] - 1) < 1e-10 and
-                all(abs(self.matriz[k][lead]) < 1e-10 for k in range(n) if k != i)):
-                cols.append(lead + 1)  # 1-based
-        return cols
-
-# ============================
-# Clases para Vectores
-# ============================
-class Vector:
-    def __init__(self, componentes: List[float]):
-        self.componentes = componentes[:]
-        self.dimension = len(componentes)
-    
-    def __str__(self) -> str:
-        return f"({', '.join(f'{x:.4f}' for x in self.componentes)})"
-    
-    def __add__(self, other: 'Vector') -> 'Vector':
-        if self.dimension != other.dimension:
-            raise ValueError("Los vectores deben tener la misma dimensión")
-        return Vector([a + b for a, b in zip(self.componentes, other.componentes)])
-    
-    def __sub__(self, other: 'Vector') -> 'Vector':
-        if self.dimension != other.dimension:
-            raise ValueError("Los vectores deben tener la misma dimensión")
-        return Vector([a - b for a, b in zip(self.componentes, other.componentes)])
-    
-    def __mul__(self, escalar: float) -> 'Vector':
-        return Vector([x * escalar for x in self.componentes])
-    
-    def __rmul__(self, escalar: float) -> 'Vector':
-        return self.__mul__(escalar)
-    
-    def producto_punto(self, other: 'Vector') -> float:
-        if self.dimension != other.dimension:
-            raise ValueError("Los vectores deben tener la misma dimensión")
-        return sum(a * b for a, b in zip(self.componentes, other.componentes))
-    
-    def norma(self) -> float:
-        return (sum(x**2 for x in self.componentes))**0.5
-    
-    def es_cero(self) -> bool:
-        return all(abs(x) < 1e-10 for x in self.componentes)
-    
-    def opuesto(self) -> 'Vector':
-        return Vector([-x for x in self.componentes])
-
-
-class OperacionesVectoriales:
-    @staticmethod
-    def verificar_propiedades_espacio_vectorial(vectores: List[Vector]) -> str:
-        """Verifica las propiedades del espacio vectorial ℝⁿ"""
-        if not vectores:
-            return "No hay vectores para verificar."
-        
-        resultado = "=== Verificación de Propiedades del Espacio Vectorial ℝⁿ ===\n\n"
-        
-        # Verificar que todos los vectores tengan la misma dimensión
-        dim = vectores[0].dimension
-        for v in vectores[1:]:
-            if v.dimension != dim:
-                return f"Error: Los vectores tienen dimensiones diferentes ({dim} vs {v.dimension})"
-        
-        resultado += f"Dimensión del espacio: ℝ^{dim}\n"
-        resultado += f"Número de vectores: {len(vectores)}\n\n"
-        
-        # 1. Propiedad conmutativa de la suma
-        if len(vectores) >= 2:
-            v1, v2 = vectores[0], vectores[1]
-            suma1 = v1 + v2
-            suma2 = v2 + v1
-            conmutativa = suma1.componentes == suma2.componentes
-            resultado += f"1. Conmutativa (v₁ + v₂ = v₂ + v₁):\n"
-            resultado += f"    v₁ + v₂ = {suma1}\n"
-            resultado += f"    v₂ + v₁ = {suma2}\n"
-            resultado += f"    ✓ Cumple: {conmutativa}\n\n"
-        
-        # 2. Propiedad asociativa de la suma
-        if len(vectores) >= 3:
-            v1, v2, v3 = vectores[0], vectores[1], vectores[2]
-            suma1 = (v1 + v2) + v3
-            suma2 = v1 + (v2 + v3)
-            asociativa = suma1.componentes == suma2.componentes
-            resultado += f"2. Asociativa ((v₁ + v₂) + v₃ = v₁ + (v₂ + v₃)):\n"
-            resultado += f"    (v₁ + v₂) + v₃ = {suma1}\n"
-            resultado += f"    v₁ + (v₂ + v₃) = {suma2}\n"
-            resultado += f"    ✓ Cumple: {asociativa}\n\n"
-        
-        # 3. Existencia del vector cero
-        vector_cero = Vector([0.0] * dim)
-        resultado += f"3. Vector cero: {vector_cero}\n"
-        resultado += f"    ✓ Existe el vector cero\n\n"
-        
-        # 4. Existencia del vector opuesto
-        if vectores:
-            v = vectores[0]
-            opuesto = v.opuesto()
-            suma_cero = v + opuesto
-            resultado += f"4. Vector opuesto para v₁ = {v}:\n"
-            resultado += f"    -v₁ = {opuesto}\n"
-            resultado += f"    v₁ + (-v₁) = {suma_cero}\n"
-            resultado += f"    ✓ Es vector cero: {suma_cero.es_cero()}\n\n"
-        
-        # 5. Propiedades de multiplicación por escalar
-        if vectores:
-            v = vectores[0]
-            escalar1, escalar2 = 2.0, 3.0
-            prop1 = (escalar1 + escalar2) * v
-            prop2 = escalar1 * v + escalar2 * v
-            distributiva1 = prop1.componentes == prop2.componentes
-            
-            prop3 = escalar1 * (escalar2 * v)
-            prop4 = (escalar1 * escalar2) * v
-            asociativa_escalar = prop3.componentes == prop4.componentes
-            
-            resultado += f"5. Propiedades de multiplicación por escalar:\n"
-            resultado += f"    (α + β)v = αv + βv: ✓ {distributiva1}\n"
-            resultado += f"    α(βv) = (αβ)v: ✓ {asociativa_escalar}\n"
-        
-        return resultado
-    
-    @staticmethod
-    def combinacion_lineal(vectores: List[Vector], vector_objetivo: Vector) -> str:
-        """Determina si el vector objetivo es combinación lineal de los vectores dados"""
-        if not vectores:
-            return "No hay vectores para la combinación lineal."
-        
-        resultado = "=== Combinación Lineal de Vectores ===\n\n"
-        resultado += f"Vectores dados: {len(vectores)}\n"
-        for i, v in enumerate(vectores):
-            resultado += f"v{i+1} = {v}\n"
-        resultado += f"\nVector objetivo: {vector_objetivo}\n\n"
-        
-        # Verificar dimensiones
-        dim = vectores[0].dimension
-        for v in vectores + [vector_objetivo]:
-            if v.dimension != dim:
-                return f"Error: Los vectores tienen dimensiones diferentes"
-        
-        # Plantear el sistema: c₁v₁ + c₂v₂ + ... + cₙvₙ = b
-        resultado += "Planteo del sistema:\n"
-        resultado += f"c₁v₁ + c₂v₂ + ... + c{len(vectores)}v{len(vectores)} = b\n\n"
-        
-        # Construir matriz aumentada
-        matriz_aumentada = []
-        for i in range(dim):
-            fila = []
-            for v in vectores:
-                fila.append(v.componentes[i])
-            fila.append(vector_objetivo.componentes[i])
-            matriz_aumentada.append(fila)
-        
-        resultado += "Matriz aumentada del sistema:\n"
-        for i, fila in enumerate(matriz_aumentada):
-            resultado += f"Fila {i+1}: {'  '.join(f'{x:8.4f}' for x in fila)}\n"
-        resultado += "\n"
-        
-        # Resolver usando eliminación gaussiana
-        sistema = SistemaLineal(matriz_aumentada)
-        resultado += sistema.eliminacion_gaussiana()
-        
-        return resultado
-    
-    @staticmethod
-    def ecuacion_vectorial(vectores: List[Vector], vector_objetivo: Vector) -> str:
-        """Resuelve la ecuación vectorial c₁v₁ + c₂v₂ + ... + cₙvₙ = b"""
-        if not vectores:
-            return "No hay vectores para la ecuación."
-        
-        resultado = "=== Ecuación Vectorial ===\n\n"
-        resultado += f"Ecuación: c₁v₁ + c₂v₂ + ... + c{len(vectores)}v{len(vectores)} = b\n\n"
-        
-        for i, v in enumerate(vectores):
-            resultado += f"v{i+1} = {v}\n"
-        resultado += f"b = {vector_objetivo}\n\n"
-        
-        # Usar el mismo método que combinación lineal
-        return resultado + OperacionesVectoriales.combinacion_lineal(vectores, vector_objetivo)
-    
-    @staticmethod
-    def _rango_y_pivotes_por_filas(matriz: List[List[float]], eps: float = 1e-12) -> tuple[int, List[int]]:
-        """
-        Reduce por Gauss–Jordan (con pivoteo parcial) y devuelve:
-        - rango (número de filas no nulas al final),
-        - lista de índices de columnas pivote (0-based).
-        La matriz se modifica en una copia local.
-        """
-        if not matriz:
-            return 0, []
-
-        A = [fila[:] for fila in matriz]  # copia
-        m, n = len(A), len(A[0])
-        fila = 0
-        columnas_pivote: List[int] = []
-
-        for col in range(n):
-            # buscar pivote (máximo en valor absoluto desde 'fila')
-            piv = max(range(fila, m), key=lambda i: abs(A[i][col]), default=None)
-            if piv is None or abs(A[piv][col]) < eps:
-                continue
-            if piv != fila:
-                A[fila], A[piv] = A[piv], A[fila]
-
-            # normalizar fila de pivote
-            pivote = A[fila][col]
-            if abs(pivote) > eps:
-                A[fila] = [x / pivote for x in A[fila]]
-
-            # anular el resto de la columna
-            for i in range(m):
-                if i != fila and abs(A[i][col]) > eps:
-                    factor = A[i][col]
-                    A[i] = [A[i][k] - factor * A[fila][k] for k in range(n)]
-
-            columnas_pivote.append(col)
-            fila += 1
-            if fila == m:
-                break
-
-        rango = len(columnas_pivote)
-        return rango, columnas_pivote
-
-    @staticmethod
-    def dependencia_independencia(vectores: List['Vector']) -> str:
-        """Verifica independencia reutilizando el logger de pasos de SistemaLineal (Gauss-Jordan)."""
-        if not vectores:
-            return "No hay vectores para verificar independencia."
-
-        n = vectores[0].dimension
-        for v in vectores:
-            if v.dimension != n:
-                return "Error: los vectores tienen dimensiones diferentes."
-
-        k = len(vectores)
-
-        # Casos rápidos
-        if k == 1:
-            return ("=== Verificación de Independencia Lineal ===\n\n"
-                    f"Conjunto de 1 vector en ℝ^{n}.\n"
-                    f"{'Independiente (no es vector cero).' if not vectores[0].es_cero() else 'Dependiente (vector cero).'}\n")
-
-        if k > n:
-            return ("=== Verificación de Independencia Lineal ===\n\n"
-                    f"n = {n}, k = {k} > n ⇒ Dependiente.\n"
-                    "Motivo: hay más vectores que la dimensión del espacio.\n")
-
-        # M con vectores como columnas (n × k)
-        M = [[vectores[j].componentes[i] for j in range(k)] for i in range(n)]
-        # Matriz aumentada [M | 0] para usar el mismo motor de pasos
-        M_aug = [fila + [0.0] for fila in M]
-
-        sistema = SistemaLineal(M_aug)
-        # Para claridad en la cabecera
-        header = "=== Verificación de Independencia Lineal (usando pasos de Gauss del módulo de sistemas) ===\n\n"
-        header += "Matriz inicial [M | 0] (vectores como columnas y columna derecha nula):\n"
-        header += "\n".join("  ".join(f"{x:.4f}" for x in fila) for fila in M_aug) + "\n\n"
-
-        pasos = sistema.eliminacion_gaussiana_solo_pasos()  # SOLO pasos, sin interpretación Ax=b
-        cols_pivote = sistema.columnas_pivote(k)
-        rango = len(cols_pivote)
-
-        # Conclusión
-        out = [header, pasos]
-        out.append("=== Conclusión ===\n")
-        out.append(f"Dimensión del espacio: ℝ^{n}\n")
-        out.append(f"Número de vectores (k): {k}\n")
-        out.append(f"Rango (por pasos de Gauss): {rango}\n")
-        out.append(f"Columnas pivote (en los vectores): {', '.join(map(str, cols_pivote)) if cols_pivote else '—'}\n\n")
-
-        if rango == k:
-            out.append("r = k ⇒ Conjunto **INDEPENDIENTE**.\n"
-                       "El sistema homogéneo M·c = 0 solo admite la solución trivial c = 0.\n")
-        else:
-            libres = k - rango
-            out.append("r < k ⇒ Conjunto **DEPENDIENTE**.\n"
-                       f"Hay {libres} variable(s) libre(s); existen soluciones no triviales c ≠ 0 con M·c = 0.\n")
-
-        out.append("")
-        return "".join(out)
-
-# ============================
-# Clases para Matrices
-# ============================
-class Matriz:
-    def __init__(self, filas: List[List[float]]):
-        self.filas = [fila[:] for fila in filas]
-        self.m = len(filas)
-        self.n = len(filas[0]) if filas else 0
-    
-    def __str__(self) -> str:
-        return "\n".join("  ".join(f"{x:8.4f}" for x in fila) for fila in self.filas)
-    
-    def __add__(self, other: 'Matriz') -> 'Matriz':
-        if self.m != other.m or self.n != other.n:
-            raise ValueError(f"Las matrices deben tener las mismas dimensiones para sumar ({self.m}×{self.n} y {other.m}×{other.n})")
-        
-        resultado = []
-        for i in range(self.m):
-            fila = [self.filas[i][j] + other.filas[i][j] for j in range(self.n)]
-            resultado.append(fila)
-        return Matriz(resultado)
-
-    def __sub__(self, other: 'Matriz') -> 'Matriz':
-        if self.m != other.m or self.n != other.n:
-            raise ValueError(f"Las matrices deben tener las mismas dimensiones para restar ({self.m}×{self.n} y {other.m}×{other.n})")
-        
-        resultado = []
-        for i in range(self.m):
-            fila = [self.filas[i][j] - other.filas[i][j] for j in range(self.n)]
-            resultado.append(fila)
-        return Matriz(resultado)
-
-    def __mul__(self, other):
-        if isinstance(other, (int, float)):
-            resultado = [[elem * other for elem in fila] for fila in self.filas]
-            return Matriz(resultado)
-        
-        if isinstance(other, Matriz):
-            if self.n != other.m:
-                raise ValueError(f"No se pueden multiplicar matrices {self.m}×{self.n} y {other.m}×{other.n}")
-            
-            resultado = []
-            for i in range(self.m):
-                fila = []
-                for j in range(other.n):
-                    suma = sum(self.filas[i][k] * other.filas[k][j] for k in range(self.n))
-                    fila.append(suma)
-                resultado.append(fila)
-            return Matriz(resultado)
-        
-        raise TypeError(f"La multiplicación no está definida para Matriz y {type(other)}")
-
-    def __rmul__(self, other):
-        if isinstance(other, (int, float)):
-            return self.__mul__(other)
-        raise TypeError(f"La multiplicación no está definida para {type(other)} y Matriz")
-
-    def transpuesta(self) -> 'Matriz':
-        resultado = [[self.filas[j][i] for j in range(self.m)] for i in range(self.n)]
-        return Matriz(resultado)
-    
-    def es_cuadrada(self) -> bool:
-        return self.m == self.n
-    
-    def es_identidad(self) -> bool:
-        if not self.es_cuadrada():
-            return False
-        for i in range(self.m):
-            for j in range(self.n):
-                if i == j and abs(self.filas[i][j] - 1) > 1e-10:
-                    return False
-                elif i != j and abs(self.filas[i][j]) > 1e-10:
-                    return False
-        return True
-
-
-class OperacionesMatriciales:
-    @staticmethod
-    def ecuacion_matricial(matriz_a: Matriz, matriz_b: Matriz) -> str:
-        """Resuelve la ecuación matricial AX = B"""
-        resultado = "=== Ecuación Matricial AX = B ===\n\n"
-        resultado += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
-        resultado += f"Matriz B ({matriz_b.m}×{matriz_b.n}):\n{matriz_b}\n\n"
-        
-        if matriz_a.n != matriz_b.m:
-            return resultado + f"Error: No se puede resolver AX = B.\n" + f"El número de columnas de A ({matriz_a.n}) debe ser igual al número de filas de B ({matriz_b.m}).\n"
-        
-        resultado += "Planteo del sistema:\n"
-        resultado += "Para cada columna j de B, resolver Axⱼ = bⱼ\n\n"
-        
-        soluciones = []
-        for j in range(matriz_b.n):
-            resultado += f"--- Columna {j+1} de B ---\n"
-            
-            matriz_aumentada = []
-            for i in range(matriz_a.m):
-                fila = matriz_a.filas[i][:] + [matriz_b.filas[i][j]]
-                matriz_aumentada.append(fila)
-            
-            resultado += f"Sistema Axⱼ = bⱼ:\n"
-            for i, fila in enumerate(matriz_aumentada):
-                resultado += f"Fila {i+1}: {'  '.join(f'{x:8.4f}' for x in fila)}\n"
-            resultado += "\n"
-            
-            sistema = SistemaLineal(matriz_aumentada)
-            resultado += sistema.eliminacion_gaussiana()
-            resultado += "\n" + "="*50 + "\n\n"
-        
-        return resultado
-    
-    @staticmethod
-    def multiplicacion_matrices(matriz_a: Matriz, matriz_b: Matriz) -> str:
-        """Multiplica dos matrices A * B"""
-        resultado = "=== Multiplicación de Matrices A * B ===\n\n"
-        resultado += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
-        resultado += f"Matriz B ({matriz_b.m}×{matriz_b.n}):\n{matriz_b}\n\n"
-        
-        try:
-            producto = matriz_a * matriz_b
-            resultado += f"Resultado A * B ({producto.m}×{producto.n}):\n{producto}\n\n"
-            
-            resultado += "Procedimiento paso a paso:\n"
-            for i in range(producto.m):
-                for j in range(producto.n):
-                    terminos = []
-                    for k in range(matriz_a.n):
-                        terminos.append(f"({matriz_a.filas[i][k]:.4f} × {matriz_b.filas[k][j]:.4f})")
-                    resultado += f"C[{i+1},{j+1}] = {' + '.join(terminos)} = {producto.filas[i][j]:.4f}\n"
-        
-        except ValueError as e:
-            resultado += f"Error: {e}\n"
-        
-        return resultado
-
-    @staticmethod
-    def suma_matrices(matriz_a: Matriz, matriz_b: Matriz) -> str:
-        resultado_str = "=== Suma de Matrices A + B ===\n\n"
-        resultado_str += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
-        resultado_str += f"Matriz B ({matriz_b.m}×{matriz_b.n}):\n{matriz_b}\n\n"
-        
-        try:
-            suma = matriz_a + matriz_b
-            resultado_str += f"Resultado A + B ({suma.m}×{suma.n}):\n{suma}\n\n"
-            
-            resultado_str += "Procedimiento paso a paso (C[i,j] = A[i,j] + B[i,j]):\n"
-            for i in range(suma.m):
-                for j in range(suma.n):
-                    a_val = matriz_a.filas[i][j]
-                    b_val = matriz_b.filas[i][j]
-                    c_val = suma.filas[i][j]
-                    resultado_str += f"C[{i+1},{j+1}] = {a_val:.4f} + {b_val:.4f} = {c_val:.4f}\n"
-
-        except ValueError as e:
-            resultado_str += f"Error: {e}\n"
-        
-        return resultado_str
-
-    @staticmethod
-    def resta_matrices(matriz_a: Matriz, matriz_b: Matriz) -> str:
-        resultado_str = "=== Resta de Matrices A - B ===\n\n"
-        resultado_str += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
-        resultado_str += f"Matriz B ({matriz_b.m}×{matriz_b.n}):\n{matriz_b}\n\n"
-        
-        try:
-            resta = matriz_a - matriz_b
-            resultado_str += f"Resultado A - B ({resta.m}×{resta.n}):\n{resta}\n\n"
-
-            resultado_str += "Procedimiento paso a paso (C[i,j] = A[i,j] - B[i,j]):\n"
-            for i in range(resta.m):
-                for j in range(resta.n):
-                    a_val = matriz_a.filas[i][j]
-                    b_val = matriz_b.filas[i][j]
-                    c_val = resta.filas[i][j]
-                    resultado_str += f"C[{i+1},{j+1}] = {a_val:.4f} - {b_val:.4f} = {c_val:.4f}\n"
-
-        except ValueError as e:
-            resultado_str += f"Error: {e}\n"
-        
-        return resultado_str
-
-    @staticmethod
-    def multiplicacion_por_escalar(matriz_a: Matriz, escalar: float) -> str:
-        resultado_str = f"=== Multiplicación de Matriz por Escalar ({escalar:.4f}) * A ===\n\n"
-        resultado_str += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
-        
-        producto = matriz_a * escalar
-        resultado_str += f"Resultado ({escalar:.4f}) * A ({producto.m}×{producto.n}):\n{producto}\n\n"
-        
-        resultado_str += f"Procedimiento paso a paso (C[i,j] = {escalar:.4f} * A[i,j]):\n"
-        for i in range(producto.m):
-            for j in range(producto.n):
-                a_val = matriz_a.filas[i][j]
-                c_val = producto.filas[i][j]
-                resultado_str += f"C[{i+1},{j+1}] = {escalar:.4f} * {a_val:.4f} = {c_val:.4f}\n"
-        
-        return resultado_str
-
-    @staticmethod
-    def matriz_traspuesta(matriz_a: Matriz) -> str:
-        resultado_str = "=== Matriz Traspuesta Aᵀ ===\n\n"
-        resultado_str += f"Matriz Original A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
-        
-        traspuesta = matriz_a.transpuesta()
-        resultado_str += f"Matriz Traspuesta Aᵀ ({traspuesta.m}×{traspuesta.n}):\n{traspuesta}\n\n"
-        
-        resultado_str += "Procedimiento (Aᵀ[i,j] = A[j,i]):\n"
-        resultado_str += "Se intercambian las filas por las columnas.\n"
-        for i in range(traspuesta.m):
-            resultado_str += f"Nueva Fila {i+1} = Antigua Columna {i+1}\n"
-        
-        resultado_str += "\nPropiedades teóricas (para referencia):\n"
-        resultado_str += "1. (Aᵀ)ᵀ = A\n"
-        resultado_str += "2. (A + B)ᵀ = Aᵀ + Bᵀ\n"
-        resultado_str += "3. (kA)ᵀ = k(Aᵀ)\n"
-        resultado_str += "4. (AB)ᵀ = Bᵀ * Aᵀ\n"
-
-        return resultado_str
-
-    @staticmethod
-    def verificar_propiedad_suma_traspuesta(matriz_a: Matriz, matriz_b: Matriz) -> str:
-        """Verifica la propiedad (A+B)^T = A^T + B^T"""
-        resultado = "=== Verificación de Propiedad: (A+B)ᵀ = Aᵀ + Bᵀ ===\n\n"
-        resultado += f"Matriz A ({matriz_a.m}×{matriz_a.n}):\n{matriz_a}\n\n"
-        resultado += f"Matriz B ({matriz_b.m}×{matriz_b.n}):\n{matriz_b}\n\n"
-
-        try:
-            # Lado Izquierdo: (A + B)ᵀ 
-            resultado += "--- Cálculo del Lado Izquierdo: (A + B)ᵀ ---\n"
-            # 1. Sumar A + B
-            suma_ab = matriz_a + matriz_b
-            resultado += f"1. Calcular A + B:\n{suma_ab}\n\n"
-            # 2. Transponer el resultado
-            lhs = suma_ab.transpuesta()
-            resultado += f"2. Transponer el resultado (A + B)ᵀ:\n{lhs}\n\n"
-
-            #Lado Derecho: Aᵀ + Bᵀ
-            resultado += "--- Cálculo del Lado Derecho: Aᵀ + Bᵀ ---\n"
-            # 1. Transponer A
-            a_t = matriz_a.transpuesta()
-            resultado += f"1. Calcular Aᵀ:\n{a_t}\n\n"
-            # 2. Transponer B
-            b_t = matriz_b.transpuesta()
-            resultado += f"2. Calcular Bᵀ:\n{b_t}\n\n"
-            # 3. Sumar las transpuestas
-            rhs = a_t + b_t
-            resultado += f"3. Sumar Aᵀ + Bᵀ:\n{rhs}\n\n"
-
-            # Conclusión
-            resultado += "--- Conclusión ---\n"
-            resultado += f"Lado Izquierdo:\n{lhs}\n\n"
-            resultado += f"Lado Derecho:\n{rhs}\n\n"
-            
-            # Comparar matrices (elemento por elemento)
-            son_iguales = all(
-                all(abs(lhs.filas[i][j] - rhs.filas[i][j]) < 1e-10 for j in range(lhs.n))
-                for i in range(lhs.m)
-            )
-
-            if son_iguales:
-                resultado += "✓ Los resultados son iguales. La propiedad (A+B)ᵀ = Aᵀ + Bᵀ se cumple.\n"
-            else:
-                resultado += "✗ Los resultados NO son iguales. La propiedad no se cumple (revisar cálculo).\n"
-
-        except ValueError as e:
-            resultado += f"Error: No se puede verificar la propiedad.\n{e}\n"
-        
-        return resultado
-
-    # ==================================================
-    # === INICIO: CÓDIGO AÑADIDO PARA LA TAREA 6 ===
-    # ==================================================
-
-    @staticmethod
-    def _imprimir_matriz_aug(matriz: List[List[float]], paso: int, operacion: str, n_split: int) -> str:
-        """Helper para imprimir la matriz aumentada [A|I] con un separador."""
-        texto = f"Paso {paso} ({operacion}):\n"
-        for fila in matriz:
-            parte_a = "  ".join(f"{valor:8.4f}" for valor in fila[:n_split])
-            parte_i = "  ".join(f"{valor:8.4f}" for valor in fila[n_split:])
-            texto += f"  [ {parte_a} | {parte_i} ]\n"
-        return texto + "\n"
-
-    @staticmethod
-    def _verificar_propiedades_invertibilidad(n: int, num_pivotes: int) -> str:
-        """Genera el texto de verificación de las propiedades (c), (d) y (e)."""
-        resultado = "\n=== Verificación de Propiedades Teóricas ===\n"
-        
-        if num_pivotes == n:
-            resultado += f"(c) La matriz A ({n}x{n}) tiene {num_pivotes} posiciones pivote.\n"
-            resultado += "    Interpretación: Si A tiene n pivotes, entonces A es invertible. (Cumple)\n\n"
-            
-            resultado += "(d) La ecuación Ax=0 tiene solamente la solución trivial.\n"
-            resultado += "    Interpretación: Dado que hay n pivotes, no hay variables libres. Si Ax=0 solo tiene la solución trivial, entonces A⁻¹ existe. (Cumple)\n\n"
-            
-            resultado += "(e) Las columnas de A forman un conjunto linealmente independiente.\n"
-            resultado += "    Interpretación: Dado que hay n pivotes, las columnas son linealmente independientes, entonces A es una matriz invertible. (Cumple)\n"
-        else:
-            resultado += f"(c) La matriz A ({n}x{n}) tiene {num_pivotes} posiciones pivote (se esperaban {n}).\n"
-            resultado += "    Interpretación: A no tiene n pivotes, por lo tanto, A NO es invertible. (No cumple)\n\n"
-            
-            resultado += "(d) La ecuación Ax=0 tiene soluciones no triviales (infinitas soluciones).\n"
-            resultado += "    Interpretación: Dado que hay menos de n pivotes, existen variables libres. Si Ax=0 tiene soluciones no triviales, A⁻¹ NO existe. (No cumple)\n\n"
-            
-            resultado += "(e) Las columnas de A forman un conjunto linealmente dependiente.\n"
-            resultado += "    Interpretación: Dado que hay menos de n pivotes, las columnas son linealmente dependientes, por lo tanto, A NO es invertible. (No cumple)\n"
-            
-        return resultado
-
-    @staticmethod
-    def inversa_gauss_jordan(matriz_a: Matriz) -> str:
-        """Calcula la inversa de una matriz por Gauss-Jordan y muestra los pasos."""
-        
-        if not matriz_a.es_cuadrada():
-            return "Error: La matriz A debe ser cuadrada para calcular su inversa."
-        
-        n = matriz_a.m
-        pasos_str = "=== Cálculo de Inversa A⁻¹ por Método de Gauss-Jordan ===\n\n"
-        
-        # 1. Construir matriz identidad
-        identidad = [[0.0] * n for _ in range(n)]
-        for i in range(n):
-            identidad[i][i] = 1.0
-            
-        # 2. Construir matriz aumentada [A | I]
-        # Usamos una copia profunda para no modificar la matriz original
-        aug = [matriz_a.filas[i][:] + identidad[i] for i in range(n)]
-        
-        pasos_str += OperacionesMatriciales._imprimir_matriz_aug(aug, 0, "Construir [A | I]", n)
-        
-        # 3. Adaptación del algoritmo de Gauss-Jordan (de tu clase SistemaLineal)
-        paso = 1
-        filas, columnas_totales = n, 2 * n
-        fila_actual = 0
-        columnas_pivote = [] # Lista para guardar los índices (0-based) de las columnas pivote
-
-        for col in range(n): # SOLO iteramos sobre las columnas de A (0 a n-1)
-            if fila_actual >= filas:
-                break
-
-            # Pivoteo parcial
-            max_row = max(range(fila_actual, filas), key=lambda i: abs(aug[i][col]))
-            
-            # Si el pivote es 0, no podemos continuar en esta columna
-            if abs(aug[max_row][col]) < 1e-12:
-                continue # No hay pivote en esta columna
-
-            # Intercambiar filas
-            if fila_actual != max_row:
-                aug[fila_actual], aug[max_row] = aug[max_row], aug[fila_actual]
-                pasos_str += OperacionesMatriciales._imprimir_matriz_aug(
-                    aug, paso, f"Intercambio f{fila_actual + 1} ↔ f{max_row + 1}", n)
-                paso += 1
-
-            pivote = aug[fila_actual][col]
-
-            # Normalizar fila pivote (hacer el pivote 1)
-            if abs(pivote) > 1e-12:
-                # Aplicar a toda la fila (incluida la parte de la identidad)
-                aug[fila_actual] = [x / pivote for x in aug[fila_actual]]
-                pasos_str += OperacionesMatriciales._imprimir_matriz_aug(
-                    aug, paso, f"f{fila_actual + 1} ← (1/{pivote:.4f}) · f{fila_actual + 1}", n)
-                paso += 1
-
-            # Eliminar (hacer ceros arriba y abajo del pivote)
-            for i in range(filas):
-                if i != fila_actual:
-                    factor = aug[i][col]
-                    if abs(factor) > 1e-12:
-                        # Aplicar la operación a TODA la fila aumentada (hasta 2*n)
-                        aug[i] = [aug[i][k] - factor * aug[fila_actual][k] for k in range(columnas_totales)]
-                        pasos_str += OperacionesMatriciales._imprimir_matriz_aug(
-                            aug, paso, f"f{i + 1} ← f{i + 1} − ({factor:.4f}) · f{fila_actual + 1}", n)
-                        paso += 1
-            
-            columnas_pivote.append(col)
-            fila_actual += 1
-
-        # 4. Verificar invertibilidad y extraer resultados
-        num_pivotes = len(columnas_pivote)
-        
-        pasos_str += f"\n--- Proceso de Reducción Finalizado ---\n"
-        pasos_str += OperacionesMatriciales._imprimir_matriz_aug(aug, paso, "Matriz Reducida", n)
-
-        # Comprobación final: La parte izquierda debe ser la identidad
-        # Verificamos si la diagonal de la parte A es 1 y si tiene n pivotes
-        parte_A_reducida = Matriz([fila[:n] for fila in aug])
-        
-        if num_pivotes < n or not parte_A_reducida.es_identidad():
-            pasos_str += "La matriz no es invertible porque no tiene pivote en cada fila/columna (no se redujo a la identidad).\n"
-            pasos_str += f"Se encontraron {num_pivotes} pivotes, pero se necesitan {n}.\n"
-        else:
-            # Extraer la matriz inversa (la parte derecha)
-            inversa_filas = [fila[n:] for fila in aug]
-            matriz_inversa = Matriz(inversa_filas)
-            
-            pasos_str += f"La matriz es invertible. La inversa A⁻¹ es:\n{matriz_inversa}\n"
-
-        # 5. Añadir verificación de propiedades
-        pasos_str += OperacionesMatriciales._verificar_propiedades_invertibilidad(n, num_pivotes)
-
-        return pasos_str
-
-    # ==================================================
-    # === FIN: CÓDIGO AÑADIDO PARA LA TAREA 6 ===
-    # ==================================================
+from tkinter import ttk
+from tkinter import messagebox, filedialog, simpledialog
+from typing import List, Tuple
+
+# ==================================================
+# === INICIO: CÓDIGO AÑADIDO ===
+# ==================================================
+#
+# Importamos las clases de lógica desde tu archivo core.py
+# Esto permite que la GUI llame a las funciones de cálculo.
+#
+try:
+    from core import (
+        SistemaLineal,
+        Vector,
+        OperacionesVectoriales,
+        Matriz,
+        OperacionesMatriciales,
+        NotacionPosicional,
+        ErroresNumericos,
+        TallerNumPy
+    )
+except ImportError:
+    messagebox.showerror(
+        "Error Crítico",
+        "No se pudo encontrar el archivo 'core.py'.\n\n"
+        "Asegúrate de que 'core.py' esté en la misma carpeta que 'gui.py'."
+    )
+    exit()
+# ==================================================
+# === FIN: CÓDIGO AÑADIDO ===
+# ==================================================
 
 
 # ============================
@@ -987,6 +110,8 @@ class AlgebraLinealGUI(ttk.Frame):
         self._build_matrices_tab()
         self._build_vectores_tab()
         self._build_matrices_operations_tab()
+        self._build_determinantes_tab()
+        self._build_conceptos_tab()
     
     def _build_matrices_tab(self):
         matrices_frame = ttk.Frame(self.notebook)
@@ -1200,6 +325,14 @@ class AlgebraLinealGUI(ttk.Frame):
         ttk.Button(ops_buttons, text="Inversa de A", command=self._calculate_inverse).pack(side=tk.LEFT, padx=(0,8))
         # ==================================================
         # === FIN: CÓDIGO AÑADIDO PARA LA TAREA 6 ===
+        # ==================================================
+        
+        # ==================================================
+        # === INICIO: CÓDIGO AÑADIDO PARA LA TAREA 7 ===
+        # ==================================================
+        ttk.Button(ops_buttons, text="Verificar det(AB)", command=self._verify_det_multiplicative_matrices).pack(side=tk.LEFT, padx=(0,8))
+        # ==================================================
+        # === FIN: CÓDIGO AÑADIDO PARA LA TAREA 7 ===
         # ==================================================
         
         card_input = ttk.Frame(matrices_ops_frame, style="Card.TFrame")
@@ -1726,7 +859,7 @@ class AlgebraLinealGUI(ttk.Frame):
         try:
             matriz_a, _ = self._read_matrices()
             resultado = OperacionesMatriciales.matriz_traspuesta(matriz_a)
-            self.txt_matrices.delete("1.KeyError: ", tk.END)
+            self.txt_matrices.delete("1.0", tk.END)
             self.txt_matrices.insert(tk.END, resultado)
             self._status("Cálculo de la traspuesta completado.")
         except Exception as e:
@@ -1774,6 +907,18 @@ class AlgebraLinealGUI(ttk.Frame):
 
     def _solve_matrices(self):
         self._matrix_equation()
+    
+    def _verify_det_multiplicative_matrices(self):
+        """Verifica la propiedad det(AB) = det(A) × det(B) desde la pestaña de Matrices."""
+        try:
+            matriz_a, matriz_b = self._read_matrices()
+            resultado = OperacionesMatriciales.verificar_propiedad_multiplicativa(matriz_a, matriz_b)
+            self.txt_matrices.delete("1.0", tk.END)
+            self.txt_matrices.insert(tk.END, resultado)
+            self._status("Propiedad multiplicativa verificada.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en verificación de propiedad multiplicativa.")
     
     def _load_matrix_example(self):
         self._render_matrix_grid(3, 3, 3, 2)
@@ -1842,7 +987,576 @@ class AlgebraLinealGUI(ttk.Frame):
                 self._status("Resultado de matrices exportado.")
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
+    
+    # ==================================================
+    # === INICIO: MÉTODOS GUI PARA TAREA 7 ===
+    # ==================================================
+    
+    def _build_determinantes_tab(self):
+        """Construye la pestaña de Determinantes."""
+        determinantes_frame = ttk.Frame(self.notebook)
+        self.notebook.add(determinantes_frame, text="Determinantes")
+        
+        card_cfg = ttk.Frame(determinantes_frame, style="Card.TFrame")
+        card_cfg.pack(fill=tk.X, padx=10, pady=(10, 8))
+        cfg = ttk.Frame(card_cfg)
+        cfg.pack(fill=tk.X, padx=10, pady=8)
+        
+        self.var_det_n = tk.IntVar()
+        
+        ttk.Label(cfg, text="Matriz cuadrada A:").grid(row=0, column=0, sticky="w")
+        ttk.Label(cfg, text="Tamaño (n×n):").grid(row=0, column=1, sticky="w")
+        self.sp_det_n = ttk.Spinbox(cfg, from_=1, to=8, width=6, textvariable=self.var_det_n, command=self._apply_det_size)
+        self.sp_det_n.grid(row=0, column=2, padx=(6,14))
+        
+        ttk.Button(cfg, text="Crear matriz", command=self._apply_det_size).grid(row=0, column=3, padx=(8,0))
+        ttk.Button(cfg, text="Ejemplo", command=self._load_det_example).grid(row=0, column=4, padx=(8,0))
+        ttk.Button(cfg, text="Limpiar", command=self._clear_det).grid(row=0, column=5, padx=(8,0))
+        
+        card_ops = ttk.Frame(determinantes_frame, style="Card.TFrame")
+        card_ops.pack(fill=tk.X, padx=10, pady=(0,8))
+        ops = ttk.Frame(card_ops)
+        ops.pack(fill=tk.X, padx=10, pady=8)
+        
+        ttk.Label(ops, text="Métodos de cálculo:", style="Header.TLabel").pack(anchor="w")
+        
+        ops_buttons = ttk.Frame(ops)
+        ops_buttons.pack(fill=tk.X, pady=(4,0))
+        
+        ttk.Button(ops_buttons, text="Método de Cramer", command=self._det_cramer).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(ops_buttons, text="Regla de Sarrus", command=self._det_sarrus).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(ops_buttons, text="Cofactores", command=self._det_cofactores).pack(side=tk.LEFT, padx=(0,8))
+        
+        ttk.Label(ops, text="Propiedades:", style="Header.TLabel").pack(anchor="w", pady=(10,0))
+        
+        props_buttons = ttk.Frame(ops)
+        props_buttons.pack(fill=tk.X, pady=(4,0))
+        
+        ttk.Button(props_buttons, text="Verificar propiedades", command=self._verify_det_properties).pack(side=tk.LEFT, padx=(0,8))
+        ttk.Button(props_buttons, text="Verificar det(AB)", command=self._verify_det_multiplicative).pack(side=tk.LEFT, padx=(0,8))
+        
+        card_input = ttk.Frame(determinantes_frame, style="Card.TFrame")
+        card_input.pack(fill=tk.BOTH, expand=False, padx=10, pady=(0,8))
+        input_frame = ttk.Frame(card_input)
+        input_frame.pack(fill=tk.BOTH, expand=False, padx=10, pady=8)
+        
+        ttk.Label(input_frame, text="Ingreso de matriz cuadrada A", style="Header.TLabel").pack(anchor="w", pady=(0,6))
+        
+        self.det_canvas = tk.Canvas(input_frame, highlightthickness=0, height=200)
+        self.det_frame = ttk.Frame(self.det_canvas)
+        self.det_scroll_y = ttk.Scrollbar(input_frame, orient="vertical", command=self.det_canvas.yview)
+        self.det_canvas.configure(yscrollcommand=self.det_scroll_y.set)
+        self.det_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
+        self.det_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.det_canvas_window = self.det_canvas.create_window((0, 0), window=self.det_frame, anchor="nw")
+        self.det_frame.bind("<Configure>", lambda e: self.det_canvas.configure(scrollregion=self.det_canvas.bbox("all")))
+        self.det_canvas.bind("<Configure>", self._on_det_canvas_resize)
+        
+        
+        card_out_det = ttk.Frame(determinantes_frame, style="Card.TFrame")
+        card_out_det.pack(fill=tk.BOTH, expand=True, padx=10)
+        out_det = ttk.Frame(card_out_det)
+        out_det.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+        out_det.columnconfigure(0, weight=1)
+        out_det.rowconfigure(1, weight=1)
+        
+        ttk.Label(out_det, text="Resultados", style="Header.TLabel").grid(row=0, column=0, sticky="w")
+        self.txt_determinantes = tk.Text(out_det, wrap="word", height=30, font=("Consolas", 10))
+        self.txt_determinantes.grid(row=1, column=0, sticky="nsew", pady=(4,0))
+        
+        btns_det = ttk.Frame(out_det)
+        btns_det.grid(row=2, column=0, sticky="e", pady=(6,0))
+        ttk.Button(btns_det, text="Copiar resultado", command=self._copy_det_output).pack(side=tk.LEFT)
+        ttk.Button(btns_det, text="Exportar pasos…", command=self._export_det_output).pack(side=tk.LEFT, padx=(8,0))
+        
+        self.var_det_n.set(3)
+        self._render_det_grid(3)
+    
+    def _on_det_canvas_resize(self, event):
+        self.det_canvas.itemconfigure(self.det_canvas_window, width=event.width)
 
+    def _on_conceptos_canvas_resize(self, event):
+        """Ajusta el ancho del frame interior al ancho del canvas."""
+        self.conceptos_canvas.itemconfigure(self.conceptos_canvas_window, width=event.width)
+    
+    def _render_det_grid(self, n: int):
+        """Renderiza la cuadrícula para ingresar una matriz cuadrada."""
+        for child in self.det_frame.winfo_children():
+            child.destroy()
+        self.det_entries: List[List[ttk.Entry]] = []
+        
+        for j in range(n):
+            ttk.Label(self.det_frame, text=f"Col {j+1}").grid(row=0, column=j+1, padx=4, pady=4)
+        
+        vcmd_num = (self.register(self._validate_number), "%P")
+        for i in range(n):
+            ttk.Label(self.det_frame, text=f"Fila {i+1}").grid(row=i+1, column=0, padx=4, pady=4)
+            fila_entries: List[ttk.Entry] = []
+            for j in range(n):
+                e = ttk.Entry(self.det_frame, width=8, justify="center", validate="key", validatecommand=vcmd_num)
+                e.grid(row=i+1, column=j+1, padx=3, pady=3)
+                e.insert(0, "0")
+                fila_entries.append(e)
+            self.det_entries.append(fila_entries)
+        
+        for j in range(n + 1):
+            self.det_frame.columnconfigure(j, weight=1)
+    
+    def _apply_det_size(self):
+        n = max(1, int(self.var_det_n.get() or 1))
+        self._render_det_grid(n)
+        self._status(f"Matriz cuadrada {n}×{n} creada.")
+    
+    def _read_det_matrix(self) -> Matriz:
+        """Lee la matriz cuadrada ingresada."""
+        n = int(self.var_det_n.get())
+        
+        filas = []
+        for i in range(n):
+            fila = []
+            for j in range(n):
+                val = self.det_entries[i][j].get().strip().replace(",", ".")
+                if val in ("", "-", "."):
+                    raise ValueError(f"Matriz A[{i+1},{j+1}] tiene valor vacío o incompleto.")
+                fila.append(float(val))
+            filas.append(fila)
+        
+        return Matriz(filas)
+    
+    def _det_cramer(self):
+        """Calcula el determinante usando el método de Cramer."""
+        try:
+            matriz_a = self._read_det_matrix()
+            resultado = OperacionesMatriciales.determinante_cramer(matriz_a)
+            self.txt_determinantes.delete("1.0", tk.END)
+            self.txt_determinantes.insert(tk.END, resultado)
+            self._status("Determinante por método de Cramer calculado.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en cálculo de determinante.")
+    
+    def _det_sarrus(self):
+        """Calcula el determinante usando la Regla de Sarrus."""
+        try:
+            matriz_a = self._read_det_matrix()
+            resultado = OperacionesMatriciales.determinante_sarrus(matriz_a)
+            self.txt_determinantes.delete("1.0", tk.END)
+            self.txt_determinantes.insert(tk.END, resultado)
+            self._status("Determinante por Regla de Sarrus calculado.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en cálculo de determinante.")
+    
+    def _det_cofactores(self):
+        """Calcula el determinante usando expansión por cofactores."""
+        try:
+            matriz_a = self._read_det_matrix()
+            resultado = OperacionesMatriciales.determinante_cofactores(matriz_a)
+            self.txt_determinantes.delete("1.0", tk.END)
+            self.txt_determinantes.insert(tk.END, resultado)
+            self._status("Determinante por cofactores calculado.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en cálculo de determinante.")
+    
+    def _verify_det_properties(self):
+        """Verifica las propiedades del determinante."""
+        try:
+            matriz_a = self._read_det_matrix()
+            resultado = OperacionesMatriciales.verificar_propiedades_determinante(matriz_a)
+            self.txt_determinantes.delete("1.0", tk.END)
+            self.txt_determinantes.insert(tk.END, resultado)
+            self._status("Propiedades del determinante verificadas.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en verificación de propiedades.")
+    
+    def _verify_det_multiplicative(self):
+        """Verifica la propiedad det(AB) = det(A) × det(B)."""
+        try:
+            # Necesitamos leer también la matriz B de la pestaña de Matrices
+            # Por simplicidad, usaremos un diálogo para ingresar B
+            matriz_a = self._read_det_matrix()
+            
+            # Crear diálogo para ingresar matriz B
+            dialog = tk.Toplevel(self.master)
+            dialog.title("Matriz B para verificar det(AB)")
+            dialog.geometry("500x300")
+            dialog.transient(self.master)
+            dialog.grab_set()
+            
+            resultado = [None]
+            
+            ttk.Label(dialog, text=f"Ingrese matriz B cuadrada (debe ser {matriz_a.n}×{matriz_a.n}):", 
+                     font=("Segoe UI", 10, "bold")).pack(pady=10)
+            
+            frame_b = ttk.Frame(dialog)
+            frame_b.pack(pady=10)
+            
+            b_entries = []
+            for i in range(matriz_a.n):
+                fila_entries = []
+                for j in range(matriz_a.n):
+                    e = ttk.Entry(frame_b, width=6, justify="center")
+                    e.grid(row=i, column=j, padx=3, pady=3)
+                    e.insert(0, "0")
+                    fila_entries.append(e)
+                b_entries.append(fila_entries)
+            
+            def ok_clicked():
+                try:
+                    filas_b = []
+                    for i in range(matriz_a.n):
+                        fila = []
+                        for j in range(matriz_a.n):
+                            val = b_entries[i][j].get().strip().replace(",", ".")
+                            if val in ("", "-", "."):
+                                raise ValueError(f"Matriz B[{i+1},{j+1}] tiene valor vacío o incompleto.")
+                            fila.append(float(val))
+                        filas_b.append(fila)
+                    resultado[0] = Matriz(filas_b)
+                    dialog.destroy()
+                except Exception as e:
+                    messagebox.showerror("Error", str(e))
+            
+            def cancel_clicked():
+                dialog.destroy()
+            
+            frame_buttons = ttk.Frame(dialog)
+            frame_buttons.pack(pady=20)
+            ttk.Button(frame_buttons, text="Aceptar", command=ok_clicked).pack(side=tk.LEFT, padx=10)
+            ttk.Button(frame_buttons, text="Cancelar", command=cancel_clicked).pack(side=tk.LEFT, padx=10)
+            
+            dialog.wait_window()
+            
+            if resultado[0] is None:
+                return
+            
+            matriz_b = resultado[0]
+            res = OperacionesMatriciales.verificar_propiedad_multiplicativa(matriz_a, matriz_b)
+            self.txt_determinantes.delete("1.0", tk.END)
+            self.txt_determinantes.insert(tk.END, res)
+            self._status("Propiedad multiplicativa verificada.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self._status("Error en verificación de propiedad multiplicativa.")
+    
+    def _load_det_example(self):
+        """Carga un ejemplo de matriz 3×3."""
+        self._render_det_grid(3)
+        datos = [
+            [2, 1, -1],
+            [-3, -1, 2],
+            [-2, 1, 2]
+        ]
+        for i in range(3):
+            for j in range(3):
+                e = self.det_entries[i][j]
+                e.delete(0, tk.END)
+                e.insert(0, str(datos[i][j]))
+        self._status("Ejemplo de matriz 3×3 cargado.")
+    
+    def _clear_det(self):
+        """Limpia los campos de la pestaña de determinantes."""
+        for fila in getattr(self, 'det_entries', []):
+            for e in fila:
+                e.delete(0, tk.END)
+                e.insert(0, "0")
+        self.txt_determinantes.delete("1.0", tk.END)
+        self._status("Campos de determinantes limpiados.")
+    
+    def _copy_det_output(self):
+        """Copia el resultado de determinantes al portapapeles."""
+        contenido = self.txt_determinantes.get("1.0", tk.END)
+        if not contenido.strip():
+            messagebox.showinfo("Copiar", "No hay contenido para copiar.")
+            return
+        self.master.clipboard_clear()
+        self.master.clipboard_append(contenido)
+        self._status("Resultado de determinantes copiado.")
+    
+    def _export_det_output(self):
+        """Exporta el resultado de determinantes a un archivo."""
+        contenido = self.txt_determinantes.get("1.0", tk.END).strip()
+        if not contenido:
+            messagebox.showinfo("Exportar", "No hay contenido para exportar.")
+            return
+        ruta = filedialog.asksaveasfilename(
+            title="Guardar resultado de determinantes",
+            defaultextension=".txt",
+            filetypes=[("Texto", "*.txt"), ("Todos", "*.*")],
+            initialfile="determinantes_resultado.txt",
+        )
+        if ruta:
+            try:
+                with open(ruta, "w", encoding="utf-8") as f:
+                    f.write(contenido)
+                messagebox.showinfo("Exportar", f"Archivo guardado en:\n{ruta}")
+                self._status("Resultado de determinantes exportado.")
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
+    
+    # ==================================================
+    # === FIN: MÉTODOS GUI PARA TAREA 7 ===
+    # ==================================================
+
+    # ==================================================
+    # === INICIO: MÉTODOS GUI PARA CONCEPTOS NUMÉRICOS ===
+    # ==================================================
+    
+    def _build_conceptos_tab(self):
+        """Construye la pestaña de Conceptos Numéricos."""
+        conceptos_frame = ttk.Frame(self.notebook)
+        self.notebook.add(conceptos_frame, text="Conceptos Numéricos")
+        
+        # --- Frame de Entradas (AHORA SCROLLABLE) ---
+        # 1. Contenedor para el lienzo y la barra de scroll
+        card_cfg_container = ttk.Frame(conceptos_frame, style="Card.TFrame")
+        card_cfg_container.pack(fill=tk.X, padx=10, pady=(10, 8)) # Se empaqueta en la parte superior
+
+        # 2. Lienzo (Canvas) y Barra de Scroll (Scrollbar)
+        # Le damos una altura fija para que la ventana de salida siempre sea visible
+        self.conceptos_canvas = tk.Canvas(card_cfg_container, highlightthickness=0, height=350)
+        self.conceptos_scroll_y = ttk.Scrollbar(card_cfg_container, orient="vertical", command=self.conceptos_canvas.yview)
+        self.conceptos_canvas.configure(yscrollcommand=self.conceptos_scroll_y.set)
+        
+        self.conceptos_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.conceptos_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # 3. Frame interno (el que realmente se "mueve" con el scroll)
+        self.conceptos_scroll_frame = ttk.Frame(self.conceptos_canvas)
+        self.conceptos_canvas_window = self.conceptos_canvas.create_window((0, 0), window=self.conceptos_scroll_frame, anchor="nw")
+        
+        # 4. Binds (eventos) para que el scroll sepa qué tan grande es el contenido
+        self.conceptos_scroll_frame.bind("<Configure>", lambda e: self.conceptos_canvas.configure(scrollregion=self.conceptos_canvas.bbox("all")))
+        self.conceptos_canvas.bind("<Configure>", self._on_conceptos_canvas_resize) # Añadiremos este método
+        
+        # ---
+        # 5. CONTENIDO DE ENTRADA (exactamente el mismo que antes)
+        #    Solo cambiamos 'card_cfg' por 'self.conceptos_scroll_frame'
+        # ---
+        cfg = ttk.Frame(self.conceptos_scroll_frame)
+        cfg.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Label(cfg, text="1. Notación Posicional", style="Header.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+
+        # Base 10
+        ttk.Label(cfg, text="Número (Base 10):").grid(row=1, column=0, sticky="e", padx=(5,10))
+        self.entry_base10 = ttk.Entry(cfg, width=20)
+        self.entry_base10.grid(row=1, column=1, sticky="w")
+        self.entry_base10.insert(0, "254") # Ejemplo
+        ttk.Button(cfg, text="Descomponer Base 10", command=self._run_base10).grid(row=1, column=2, padx=(10,0))
+        
+        # Base 2
+        ttk.Label(cfg, text="Número (Base 2):").grid(row=2, column=0, sticky="e", padx=(5,10), pady=(10,0))
+        self.entry_base2 = ttk.Entry(cfg, width=20)
+        self.entry_base2.grid(row=2, column=1, sticky="w", pady=(10,0))
+        self.entry_base2.insert(0, "1101") # Ejemplo
+        ttk.Button(cfg, text="Descomponer Base 2", command=self._run_base2).grid(row=2, column=2, padx=(10,0), pady=(10,0))
+        
+        ttk.Separator(cfg, orient="horizontal").grid(row=3, column=0, columnspan=3, sticky="ew", pady=20)
+
+        ttk.Label(cfg, text="2. Errores Numéricos y Punto Flotante", style="Header.TLabel").grid(row=4, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        
+        ttk.Button(cfg, text="Mostrar Explicaciones de Errores", command=self._run_errores).grid(row=5, column=1, sticky="w")
+        
+        # --- Separador y Taller NumPy ---
+        ttk.Separator(cfg, orient="horizontal").grid(row=6, column=0, columnspan=3, sticky="ew", pady=20)
+        
+        ttk.Label(cfg, text="3. Manejo de números flotantes y otros (NumPy)", style="Header.TLabel").grid(row=7, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        
+        # 4.1 Pérdida de Precisión
+        ttk.Label(cfg, text="Número Grande (a):").grid(row=8, column=0, sticky="e", padx=(5,10), pady=(5,0))
+        self.entry_taller_a = ttk.Entry(cfg, width=20)
+        self.entry_taller_a.grid(row=8, column=1, sticky="w", pady=(5,0))
+        self.entry_taller_a.insert(0, "1e20") # Sugerencia
+        
+        ttk.Label(cfg, text="Número Pequeño (b):").grid(row=9, column=0, sticky="e", padx=(5,10), pady=(5,0))
+        self.entry_taller_b = ttk.Entry(cfg, width=20)
+        self.entry_taller_b.grid(row=9, column=1, sticky="w", pady=(5,0))
+        self.entry_taller_b.insert(0, "0.123") # Sugerencia
+        
+        ttk.Button(cfg, text="Probar (a+b)-a", command=self._run_taller_grande_pequeno).grid(row=9, column=2, padx=(10,0), pady=(5,0))
+
+        # 4.2 Cancelación Catastrófica
+        ttk.Label(cfg, text="Número 'c':").grid(row=10, column=0, sticky="e", padx=(5,10), pady=(5,0))
+        self.entry_taller_c = ttk.Entry(cfg, width=20)
+        self.entry_taller_c.grid(row=10, column=1, sticky="w", pady=(5,0))
+        self.entry_taller_c.insert(0, "1.00000000000001") # Sugerencia
+        
+        ttk.Label(cfg, text="Número 'd':").grid(row=11, column=0, sticky="e", padx=(5,10), pady=(5,0))
+        self.entry_taller_d = ttk.Entry(cfg, width=20)
+        self.entry_taller_d.grid(row=11, column=1, sticky="w", pady=(5,0))
+        self.entry_taller_d.insert(0, "1.0") # Sugerencia
+        
+        ttk.Button(cfg, text="Probar (c-d)", command=self._run_taller_cancelacion).grid(row=11, column=2, padx=(10,0), pady=(5,0))
+
+        # 4.3 Demos
+        ttk.Button(cfg, text="Mostrar Demos (float32, inf, nan)", command=self._run_taller_demos).grid(row=12, column=1, sticky="w", pady=(10,0))
+
+        # --- Separador y Ejercicio Principal de Error ---
+        ttk.Separator(cfg, orient="horizontal").grid(row=13, column=0, columnspan=3, sticky="ew", pady=20)
+        
+        ttk.Label(cfg, text="4. Ejercicio de Propagación de Error", style="Header.TLabel").grid(row=14, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        
+        ttk.Label(cfg, text="Valor Verdadero (xv):").grid(row=15, column=0, sticky="e", padx=(5,10), pady=(5,0))
+        self.entry_error_xv = ttk.Entry(cfg, width=20)
+        self.entry_error_xv.grid(row=15, column=1, sticky="w", pady=(5,0))
+        self.entry_error_xv.insert(0, "1.570796") # Ejemplo: Pi/2
+        
+        ttk.Label(cfg, text="Valor Aproximado (xa):").grid(row=16, column=0, sticky="e", padx=(5,10), pady=(5,0))
+        self.entry_error_xa = ttk.Entry(cfg, width=20)
+        self.entry_error_xa.grid(row=16, column=1, sticky="w", pady=(5,0))
+        self.entry_error_xa.insert(0, "1.57") # Ejemplo: Aproximación
+        
+        ttk.Button(cfg, text="Calcular Errores", command=self._run_error_propagation).grid(row=16, column=2, padx=(10,0), pady=(5,0))
+        
+        # --- FIN DEL CONTENIDO DE ENTRADA ---
+
+        # --- Frame de Salida (Se empaqueta *después* del de entrada) ---
+        card_out_det = ttk.Frame(conceptos_frame, style="Card.TFrame")
+        # Esto hace que la salida llene el *resto* del espacio disponible
+        card_out_det.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10)) 
+        out_det = ttk.Frame(card_out_det)
+        out_det.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+        out_det.columnconfigure(0, weight=1)
+        out_det.rowconfigure(1, weight=1)
+        
+        ttk.Label(out_det, text="Resultados y Explicaciones", style="Header.TLabel").grid(row=0, column=0, sticky="w")
+        self.txt_conceptos = tk.Text(out_det, wrap="word", height=10, font=("Consolas", 10)) # Se reduce altura por defecto
+        self.txt_conceptos.grid(row=1, column=0, sticky="nsew", pady=(4,0))
+        
+        btns_det = ttk.Frame(out_det)
+        btns_det.grid(row=2, column=0, sticky="e", pady=(6,0))
+        ttk.Button(btns_det, text="Copiar resultado", command=self._copy_conceptos_output).pack(side=tk.LEFT)
+        ttk.Button(btns_det, text="Limpiar", command=self._clear_conceptos).pack(side=tk.LEFT, padx=(8,0))
+        
+        # Cargar un ejemplo inicial
+        self._run_base10()
+
+    def _run_base10(self):
+        """Llama a la descomposición de base 10."""
+        num_str = self.entry_base10.get().strip()
+        resultado = NotacionPosicional.descomponer_base10(num_str)
+        self.txt_conceptos.delete("1.0", tk.END)
+        self.txt_conceptos.insert(tk.END, resultado)
+        self._status("Descomposición Base 10 calculada.")
+
+    def _run_base2(self):
+        """Llama a la descomposición de base 2."""
+        num_str = self.entry_base2.get().strip()
+        resultado = NotacionPosicional.descomponer_base2(num_str)
+        self.txt_conceptos.delete("1.0", tk.END)
+        self.txt_conceptos.insert(tk.END, resultado)
+        self._status("Descomposición Base 2 calculada.")
+
+    def _run_errores(self):
+        """Muestra las explicaciones de errores."""
+        resultado = ErroresNumericos.get_explicaciones_errores()
+        self.txt_conceptos.delete("1.0", tk.END)
+        self.txt_conceptos.insert(tk.END, resultado)
+        self._status("Explicaciones de errores mostradas.")
+
+    def _clear_conceptos(self):
+        """Limpia los campos de la pestaña de conceptos."""
+        self.entry_base10.delete(0, tk.END)
+        self.entry_base10.insert(0, "254")
+        self.entry_base2.delete(0, tk.END)
+        self.entry_base2.insert(0, "1101")
+        
+        # --- AÑADIR ESTAS LÍNEAS ---
+        self.entry_taller_a.delete(0, tk.END)
+        self.entry_taller_a.insert(0, "1e20")
+        self.entry_taller_b.delete(0, tk.END)
+        self.entry_taller_b.insert(0, "0.123")
+        self.entry_taller_c.delete(0, tk.END)
+        self.entry_taller_c.insert(0, "1.00000000000001")
+        self.entry_taller_d.delete(0, tk.END)
+        self.entry_taller_d.insert(0, "1.0")
+        # --- FIN AÑADIR ---
+        
+        self.entry_error_xv.delete(0, tk.END)
+        self.entry_error_xv.insert(0, "1.570796")
+        self.entry_error_xa.delete(0, tk.END)
+        self.entry_error_xa.insert(0, "1.57")
+        
+        self.txt_conceptos.delete("1.0", tk.END)
+        self._status("Campos de conceptos limpiados.")
+    
+    def _copy_conceptos_output(self):
+        """Copia el resultado de conceptos al portapapeles."""
+        contenido = self.txt_conceptos.get("1.0", tk.END)
+        if not contenido.strip():
+            messagebox.showinfo("Copiar", "No hay contenido para copiar.")
+            return
+        self.master.clipboard_clear()
+        self.master.clipboard_append(contenido)
+        self._status("Resultado de conceptos copiado.")
+    
+    def _run_taller_grande_pequeno(self):
+        """Prueba la suma de un número grande y uno pequeño."""
+        try:
+            a_str = self.entry_taller_a.get().strip().replace(",", ".")
+            b_str = self.entry_taller_b.get().strip().replace(",", ".")
+            resultado = TallerNumPy.taller_grande_pequeno(a_str, b_str)
+            self.txt_conceptos.delete("1.0", tk.END)
+            self.txt_conceptos.insert(tk.END, resultado)
+            self._status("Prueba (a+b)-a completada.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error en la prueba: {e}")
+            self._status("Error en Taller (a+b)-a.")
+            
+    def _run_taller_cancelacion(self):
+        """Prueba la resta de números casi iguales."""
+        try:
+            c_str = self.entry_taller_c.get().strip().replace(",", ".")
+            d_str = self.entry_taller_d.get().strip().replace(",", ".")
+            resultado = TallerNumPy.taller_cancelacion(c_str, d_str)
+            self.txt_conceptos.delete("1.0", tk.END)
+            self.txt_conceptos.insert(tk.END, resultado)
+            self._status("Prueba (c-d) completada.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error en la prueba: {e}")
+            self._status("Error en Taller (c-d).")
+            
+    def _run_taller_demos(self):
+        """Llama a las demos de NumPy que no usan entrada."""
+        resultado = TallerNumPy.run_taller_demos()
+        self.txt_conceptos.delete("1.0", tk.END)
+        self.txt_conceptos.insert(tk.END, resultado)
+        self._status("Demos de NumPy (float32, inf, nan) mostradas.")
+    
+    def _run_error_propagation(self):
+        """Calcula el error absoluto, relativo y de propagación."""
+        try:
+            # Leer los valores de los campos de entrada
+            xv_str = self.entry_error_xv.get().strip().replace(",", ".")
+            xa_str = self.entry_error_xa.get().strip().replace(",", ".")
+            
+            if not xv_str or not xa_str:
+                raise ValueError("Los campos no pueden estar vacíos.")
+                
+            xv = float(xv_str)
+            xa = float(xa_str)
+            
+            # Llamar a la función de core.py
+            resultado = ErroresNumericos.calcular_errores_propagacion(xv, xa)
+            
+            # Mostrar en el cuadro de texto
+            self.txt_conceptos.delete("1.0", tk.END)
+            self.txt_conceptos.insert(tk.END, resultado)
+            self._status("Cálculo de propagación de error completado.")
+            
+        except ValueError as ve:
+            messagebox.showerror("Error de entrada", f"Valor no válido: {ve}")
+            self._status("Error: Ingrese números válidos.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Ocurrió un error inesperado:\n{e}")
+            self._status("Error en el cálculo.")
+    
+    # ==================================================
+    # === FIN: MÉTODOS GUI PARA CONCEPTOS NUMÉRICOS ===
+    # ==================================================
 
 if __name__ == "__main__":
     root = tk.Tk()
