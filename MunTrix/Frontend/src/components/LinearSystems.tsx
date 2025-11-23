@@ -23,7 +23,7 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
   const [customMatrix, setCustomMatrix] = useState<Matrix>([
     [2, 1, -1, 8],
     [-3, -1, 2, -11],
-    [-2, 1, 2, -3]
+    [-2, 1, 2, -3],
   ]);
   const [useCustom, setUseCustom] = useState(true);
   const [solution, setSolution] = useState<Solution | null>(null);
@@ -34,7 +34,7 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
     if (useCustom) {
       matrixToSolve = customMatrix;
     } else {
-      const selected = variables.find(v => v.name === selectedMatrix);
+      const selected = variables.find((v) => v.name === selectedMatrix);
       if (!selected?.matrix) {
         return;
       }
@@ -58,20 +58,22 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
 
   const handleCellChange = (row: number, col: number, value: string) => {
     const newMatrix: Matrix = customMatrix.map((r: number[], i: number) =>
-  r.map((c: number, j: number) =>
-    i === row && j === col ? parseFloat(value) || 0 : c
-  )
-);
+      r.map((c: number, j: number) =>
+        i === row && j === col ? parseFloat(value) || 0 : c
+      )
+    );
+    setCustomMatrix(newMatrix);
+  };
 
   const loadFromVariable = (name: 'A' | 'B' | 'C' | 'D' | 'E') => {
-    const variable = variables.find(v => v.name === name);
+    const variable = variables.find((v) => v.name === name);
     if (variable?.matrix) {
       setCustomMatrix(variable.matrix);
       setUseCustom(true);
     }
   };
 
-  const availableMatrices = variables.filter(v => v.matrix !== null);
+  const availableMatrices = variables.filter((v) => v.matrix !== null);
 
   return (
     <div className="h-full bg-[#0a0a0f] overflow-auto">
@@ -83,15 +85,19 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
               Sistemas de Ecuaciones Lineales
             </h2>
           </div>
-          <p className="text-purple-300/70">Resuelva sistemas usando el método de Gauss-Jordan</p>
+          <p className="text-purple-300/70">
+            Resuelva sistemas usando el método de Gauss-Jordan
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-6">
           {/* Panel Izquierdo: Entrada */}
           <div className="space-y-6">
             <div className="bg-gradient-to-br from-[#16161d] to-[#1e1e2e] border border-purple-500/30 rounded-xl p-6 shadow-lg shadow-purple-500/10">
-              <h3 className="text-sm mb-4 text-purple-300/90 uppercase tracking-wider">Fuente de Datos</h3>
-              
+              <h3 className="text-sm mb-4 text-purple-300/90 uppercase tracking-wider">
+                Fuente de Datos
+              </h3>
+
               <div className="flex gap-2 mb-4">
                 <button
                   onClick={() => setUseCustom(true)}
@@ -117,7 +123,9 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
 
               {!useCustom && (
                 <div className="mb-4">
-                  <label className="block text-sm mb-2 text-purple-300/70">Seleccionar Matriz</label>
+                  <label className="block text-sm mb-2 text-purple-300/70">
+                    Seleccionar Matriz
+                  </label>
                   <div className="flex gap-2 flex-wrap">
                     {availableMatrices.map((v) => (
                       <button
@@ -130,7 +138,9 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
                         }`}
                       >
                         {v.name}
-                        <span className="text-xs ml-1 opacity-70">({v.rows}×{v.cols})</span>
+                        <span className="text-xs ml-1 opacity-70">
+                          ({v.rows}×{v.cols})
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -141,7 +151,9 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
                 <>
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-2">
-                      <label className="text-sm text-purple-300/70">Matriz Aumentada [A|b]</label>
+                      <label className="text-sm text-purple-300/70">
+                        Matriz Aumentada [A|b]
+                      </label>
                       <div className="flex gap-2">
                         {availableMatrices.map((v) => (
                           <button
@@ -166,9 +178,13 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
                                 type="number"
                                 step="0.1"
                                 value={cell}
-                                onChange={(e) => handleCellChange(i, j, e.target.value)}
+                                onChange={(e) =>
+                                  handleCellChange(i, j, e.target.value)
+                                }
                                 className={`w-16 px-2 py-1 bg-[#0a0a0f] border rounded text-center text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 text-purple-100 font-mono transition-all duration-200 ${
-                                  j === row.length - 1 ? 'border-l-2 border-l-cyan-500 border-cyan-500/50' : 'border-purple-500/30'
+                                  j === row.length - 1
+                                    ? 'border-l-2 border-l-cyan-500 border-cyan-500/50'
+                                    : 'border-purple-500/30'
                                 }`}
                               />
                             ))}
@@ -177,7 +193,8 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
                       </div>
                     </div>
                     <p className="text-xs text-purple-400/50 mt-2">
-                      La última columna representa el vector de términos independientes
+                      La última columna representa el vector de términos
+                      independientes
                     </p>
                   </div>
                 </>
@@ -194,7 +211,9 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
 
             {solution && solution.type === 'unique' && solution.solution && (
               <div className="bg-gradient-to-br from-green-900/20 to-emerald-800/10 border border-green-500/30 rounded-xl p-6 shadow-lg shadow-green-500/10">
-                <h3 className="text-sm mb-4 text-green-300/90 uppercase tracking-wider">Solución Única</h3>
+                <h3 className="text-sm mb-4 text-green-300/90 uppercase tracking-wider">
+                  Solución Única
+                </h3>
                 <div className="space-y-2">
                   {solution.solution.map((val, i) => (
                     <div key={i} className="flex items-center gap-3 text-green-200">
@@ -216,9 +235,12 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
                 <div className="flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-cyan-400 mt-0.5" />
                   <div>
-                    <h3 className="text-sm mb-2 text-cyan-300/90">Infinitas Soluciones</h3>
+                    <h3 className="text-sm mb-2 text-cyan-300/90">
+                      Infinitas Soluciones
+                    </h3>
                     <p className="text-sm text-cyan-200/70">
-                      El sistema tiene variables libres. Existen infinitas soluciones.
+                      El sistema tiene variables libres. Existen infinitas
+                      soluciones.
                     </p>
                   </div>
                 </div>
@@ -242,7 +264,9 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
 
           {/* Panel Derecho: Log de Pasos */}
           <div className="bg-gradient-to-br from-[#16161d] to-[#1e1e2e] border border-purple-500/30 rounded-xl p-6 shadow-lg shadow-purple-500/10">
-            <h3 className="text-sm mb-4 text-purple-300/90 uppercase tracking-wider">Procedimiento (Gauss-Jordan)</h3>
+            <h3 className="text-sm mb-4 text-purple-300/90 uppercase tracking-wider">
+              Procedimiento (Gauss-Jordan)
+            </h3>
             {solution ? (
               <div className="bg-[#0d0d12]/50 rounded-lg p-4 font-mono text-xs overflow-auto max-h-[600px] space-y-3 border border-purple-500/20">
                 {solution.steps.map((step, i) => (
@@ -261,5 +285,4 @@ export function LinearSystems({ variables, onEditVariable, useFractions }: Linea
       </div>
     </div>
   );
-}
 }

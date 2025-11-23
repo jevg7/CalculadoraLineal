@@ -15,7 +15,21 @@ from core.vectors import check_independence, check_basis
 from core.numerical import decompose_base10, decompose_base2, floating_point_demo
 
 app = Flask(__name__)
-CORS(app)
+
+
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"],
+    }
+})
+
+
+@app.before_request
+def handle_options():
+    if request.method == "OPTIONS":
+        return "", 200
 
 
 
@@ -44,104 +58,165 @@ def home():
 
 
 
-
-@app.post("/api/matrices/add")
-def api_add():
+@app.post("/api/matrix/operation")
+def api_matrix_operation():
     data = request.json
-    result = add_matrices(data["A"], data["B"])
-    return jsonify({"result": result})
+    operation = data.get("operation")
+    A = data.get("firstMatrix")
+    B = data.get("secondMatrix")
+    scalar = data.get("scalar")
 
+    try:
+        # Suma
+        if operation == "add":
+            result = add_matrices(A, B)
+            return jsonify({"result": result, "steps": [], "error": None})
 
-@app.post("/api/matrices/subtract")
-def api_subtract():
-    data = request.json
-    result = subtract_matrices(data["A"], data["B"])
-    return jsonify({"result": result})
+        # Resta
+        elif operation == "subtract":
+            result = subtract_matrices(A, B)
+            return jsonify({"result": result, "steps": [], "error": None})
 
+        # Multiplicación
+        elif operation == "multiply":
+            result = multiply_matrices(A, B)
+            return jsonify({"result": result, "steps": [], "error": None})
 
-@app.post("/api/matrices/multiply")
-def api_multiply():
-    data = request.json
-    result = multiply_matrices(data["A"], data["B"])
-    return jsonify({"result": result})
+        # Multiplicación por escalar
+        elif operation == "scalar":
+            result = scalar_multiply(A, scalar)
+            return jsonify({"result": result, "steps": [], "error": None})
 
+        # Transposición
+        elif operation == "transpose":
+            result = transpose_matrix(A)
+            return jsonify({"result": result, "steps": [], "error": None})
 
-@app.post("/api/matrices/scalar")
-def api_scalar():
-    data = request.json
-    result = scalar_multiply(data["matrix"], data["scalar"])
-    return jsonify({"result": result})
+        # Inversa
+        elif operation == "inverse":
+            result = inverse_matrix(A)
+            return jsonify({"result": result, "steps": [], "error": None})
 
+        else:
+            return jsonify({"result": None, "steps": [], "error": "Operación no reconocida"}), 400
 
-@app.post("/api/matrices/transpose")
-def api_transpose():
-    data = request.json
-    result = transpose_matrix(data["matrix"])
-    return jsonify({"result": result})
-
-
-@app.post("/api/matrices/inverse")
-def api_inverse():
-    data = request.json
-    result = inverse_matrix(data["matrix"])
-    return jsonify({"result": result})
-
-
+    except Exception as e:
+        return jsonify({
+            "result": None,
+            "steps": [],
+            "error": str(e)
+        }), 400
 
 
 @app.post("/api/systems/solve")
 def api_solve_system():
+    """
+    Endpoint exacto para LinearSystems.tsx:
+    recibe: { "matrix": [...] }
+    responde: { "type": "...", "solution": [...], "steps": [...] }
+    """
+    try:
+        data = request.json
+        matrix = data.get("matrix")
+
+        if matrix is None:
+            return jsonify({"error": "No se envió ninguna matriz"}), 400
+
+        result = solve_linear_system(matrix)
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({
+            "type": "none",
+            "solution": None,
+            "steps": [f"Error interno en el servidor: {str(e)}"]
+        }), 500
+
+
+@app.post("/api/determinant")
+def api_determinant():
     data = request.json
-    sol, steps = solve_system(data["matrix"])
-    return jsonify({"solution": sol, "steps": steps})
+    matrix = data.get("matrix")
+    method = data.get("method", "cofactors")
 
+    if matrix is None:
+        return jsonify({"error": "No se envió ninguna matriz"}), 400
 
+    try:
+        
+        result = determinant_cofactors(matrix, method)
 
-@app.post("/api/determinants/cofactors")
-def api_det_cofactors():
-    data = request.json
-    return jsonify({"determinant": determinant_cofactors(data["matrix"])})
+        return jsonify({
+            "determinant": result["determinant"],
+            "steps": result["steps"]
+        })
 
-
-@app.post("/api/determinants/sarrus")
-def api_det_sarrus():
-    data = request.json
-    return jsonify({"determinant": determinant_sarrus(data["matrix"])})
-
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "determinant": None,
+            "steps": []
+        }), 400
 
 
 
 @app.post("/api/vectors/independence")
 def api_vectors_independence():
     data = request.json
-    result = check_independence(data["vectors"])
+
+    vectors = data.get("vectors")
+    dimension = data.get("dimension")
+
+    if vectors is None or dimension is None:
+        return jsonify({
+            "error": "Se requieren 'vectors' y 'dimension'.",
+            "details": []
+        }), 400
+
+    result = check_independence(vectors, dimension)
     return jsonify(result)
 
 
 @app.post("/api/vectors/basis")
 def api_vectors_basis():
     data = request.json
-    result = check_basis(data["vectors"])
+
+    vectors = data.get("vectors")
+    dimension = data.get("dimension")
+
+    if vectors is None or dimension is None:
+        return jsonify({
+            "error": "Se requieren 'vectors' y 'dimension'.",
+            "details": []
+        }), 400
+
+    result = check_basis(vectors, dimension)
     return jsonify(result)
 
 
-
-
-@app.post("/api/numerical/base10")
+@app.route("/api/numerical/base10", methods=["POST", "OPTIONS"])
 def api_num_base10():
+    if request.method == "OPTIONS":
+        return "", 200
     data = request.json
     return jsonify({"steps": decompose_base10(data["number"])})
 
 
-@app.post("/api/numerical/base2")
+@app.route("/api/numerical/base2", methods=["POST", "OPTIONS"])
 def api_num_base2():
+    if request.method == "OPTIONS":
+        return "", 200
     data = request.json
     return jsonify({"steps": decompose_base2(data["number"])})
 
 
-@app.get("/api/numerical/floating")
+@app.route("/api/numerical/floating", methods=["GET", "OPTIONS"])
 def api_float_demo():
+    if request.method == "OPTIONS":
+        return "", 200
     return jsonify(floating_point_demo())
+
 
 
 if __name__ == "__main__":
