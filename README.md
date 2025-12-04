@@ -6,22 +6,6 @@
 <strong>Tu laboratorio digital definitivo para el Álgebra Lineal.</strong>
 </p>
 
-<!-- Badges (Puedes personalizarlos más adelante en shields.io) -->
-
-<img src="https://www.google.com/search?q=https://img.shields.io/badge/Estado-En_Desarrollo-orange%3Fstyle%3Dfor-the-badge" alt="Estado" />
-<img src="https://www.google.com/search?q=https://img.shields.io/badge/Python-3.9%2B-blue%3Fstyle%3Dfor-the-badge%26logo%3Dpython%26logoColor%3Dwhite" alt="Python" />
-<img src="https://www.google.com/search?q=https://img.shields.io/badge/React-18-61DAFB%3Fstyle%3Dfor-the-badge%26logo%3Dreact%26logoColor%3Dblack" alt="React" />
-
-<br /><br />
-
-<a href="#-instalación-y-uso"><strong>Empezar »</strong></a>
-·
-<a href="https://www.google.com/search?q=https://github.com/jevg7/CalculadoraLineal/issues">Reportar Bug</a>
-
-</div>
-
-<br />
-
 <!-- SOBRE EL PROYECTO -->
 
 💡 Sobre el Proyecto
