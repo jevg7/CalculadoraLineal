@@ -1,7 +1,6 @@
 from typing import List
 from .common import Matrix, StepResult, format_matrix
-from .determinants import determinant_general
-
+from .determinants import _det_cofactors_recursive
 
 def add_matrices_with_steps(a: Matrix, b: Matrix) -> StepResult:
     if not a or not b or len(a) != len(b) or len(a[0]) != len(b[0]):
@@ -115,7 +114,7 @@ def inverse_with_steps(m: Matrix) -> StepResult:
         )
     n = len(m)
     steps: list[str] = []
-    det = determinant_general(m)
+    det = _det_cofactors_recursive(m)
     steps.append("INVERSA DE MATRIZ mediante Gauss-Jordan")
     steps.append(f"det(A) = {det}")
     if abs(det) < 1e-12:

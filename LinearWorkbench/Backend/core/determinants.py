@@ -1,81 +1,126 @@
-from typing import Literal
+from typing import Literal, List
 from .common import Matrix, StepResult, format_matrix
 
+def _det_2x2_steps(m: Matrix, steps: List[str]) -> float:
+    a, b = m[0][0], m[0][1]
+    c, d = m[1][0], m[1][1]
+    res = a * d - b * c
+    steps.append(f"  > Operación 2x2: ({a} * {d}) - ({b} * {c})")
+    steps.append(f"  > Resultado parcial: {a*d} - {b*c} = {res}")
+    return res
 
-def determinant_2x2(m: Matrix) -> float:
-    return m[0][0] * m[1][1] - m[0][1] * m[1][0]
-
-
-def determinant_3x3_sarrus(m: Matrix) -> float:
+def _det_3x3_sarrus_steps(m: Matrix, steps: List[str]) -> float:
     a, b, c = m[0]
     d, e, f = m[1]
     g, h, i = m[2]
-    pos = a * e * i + b * f * g + c * d * h
-    neg = c * e * g + a * f * h + b * d * i
-    return pos - neg
+    dp1, dp2, dp3 = a*e*i, b*f*g, c*d*h
+    sum_pos = dp1 + dp2 + dp3
+    ds1, ds2, ds3 = g*e*c, h*f*a, i*d*b
+    sum_neg = ds1 + ds2 + ds3
+    det = sum_pos - sum_neg
+    steps.append("  > Diagonales Principales:")
+    steps.append(f"    ({a}*{e}*{i}) + ({b}*{f}*{g}) + ({c}*{d}*{h})")
+    steps.append(f"    = {dp1} + {dp2} + {dp3} = {sum_pos}")
+    steps.append("  > Diagonales Secundarias:")
+    steps.append(f"    ({g}*{e}*{c}) + ({h}*{f}*{a}) + ({i}*{d}*{b})")
+    steps.append(f"    = {ds1} + {ds2} + {ds3} = {sum_neg}")
+    steps.append(f"  > Total: {sum_pos} - {sum_neg} = {det}")
+    return det
 
+def _get_minor(m: Matrix, i: int, j: int) -> Matrix:
+    return [row[:j] + row[j+1:] for row in (m[:i] + m[i+1:])]
 
-def determinant_general(m: Matrix) -> float:
+def _det_cofactors_recursive(m: Matrix, steps: List[str], depth: int = 0) -> float:
     n = len(m)
-    if n == 0:
-        return 0.0
-    a = [row[:] for row in m]
-    det = 1.0
-    sign = 1.0
-    for i in range(n):
-        pivot = max(range(i, n), key=lambda r: abs(a[r][i]))
-        if abs(a[pivot][i]) < 1e-12:
-            return 0.0
-        if pivot != i:
-            a[i], a[pivot] = a[pivot], a[i]
-            sign *= -1.0
-        det *= a[i][i]
-        pv = a[i][i]
-        for r in range(i + 1, n):
-            factor = a[r][i] / pv
-            for c in range(i, n):
-                a[r][c] -= factor * a[i][c]
-    return det * sign
+    indent = "  " * depth
+    if n == 1:
+        return m[0][0]
+    if n == 2:
+        val = m[0][0] * m[1][1] - m[0][1] * m[1][0]
+        if depth < 2:
+            steps.append(f"{indent}Calculando det 2x2: ({m[0][0]}*{m[1][1]}) - ({m[0][1]}*{m[1][0]}) = {val}")
+        return val
+    det = 0.0
+    row_expr = []
+    steps.append(f"{indent}Expandiendo por fila 0 de matriz {n}x{n}...")
+    for c in range(n):
+        element = m[0][c]
+        if element == 0:
+            continue
+        sign = 1 if c % 2 == 0 else -1
+        sign_str = "+" if sign == 1 else "-"
+        minor = _get_minor(m, 0, c)
+        minor_det = _det_cofactors_recursive(minor, steps, depth + 1)
+        term = sign * element * minor_det
+        det += term
+        row_expr.append(f"{sign_str}({element} * {minor_det})")
+    steps.append(f"{indent}Sumatoria fila: {' '.join(row_expr)} = {det}")
+    return det
 
+def _cramer_det(m: Matrix, steps: List[str]) -> float:
+    rows = len(m)
+    cols = len(m[0])
+    matrix_a = []
+    
+    if cols == rows + 1:
+        steps.append("Matriz Aumentada detectada. Extrayendo matriz de coeficientes (A)...")
+        matrix_a = [row[:-1] for row in m]
+    elif cols == rows:
+        steps.append("Matriz Cuadrada detectada. Usando como matriz de coeficientes (A)...")
+        matrix_a = [row[:] for row in m]
+    else:
+        steps.append(f"ERROR: Dimensiones inválidas ({rows}x{cols}) para Cramer.")
+        return 0.0
+        
+    steps.append(format_matrix(matrix_a))
+    steps.append("Calculando Determinante del Sistema (Δ):")
+    
+    det_sys = 0.0
+    if len(matrix_a) == 3:
+        det_sys = _det_3x3_sarrus_steps(matrix_a, steps)
+    elif len(matrix_a) == 2:
+        det_sys = _det_2x2_steps(matrix_a, steps)
+    else:
+        det_sys = _det_cofactors_recursive(matrix_a, steps)
+        
+    steps.append(f"-> Δ (Delta Sistema) = {det_sys}")
+    return det_sys
 
 def determinant_with_steps(
     m: Matrix,
     method: Literal["cofactors", "sarrus", "cramer"] = "cofactors",
 ) -> StepResult:
     steps: list[str] = []
-    if not m or len(m) != len(m[0]):
-        return StepResult(steps=["La matriz debe ser cuadrada"], error="not_square")
+    if not m:
+        return StepResult(steps=["Matriz vacía"], error="empty")
+    
+    steps.append(f"CÁLCULO DE DETERMINANTE (Método: {method.upper()})")
+    steps.append("-" * 40)
 
-    n = len(m)
-    steps.append("CÁLCULO DE DETERMINANTE")
-    steps.append("Matriz A:")
-    steps.append(format_matrix(m))
-    steps.append("")
-
-    if n == 1:
-        det = m[0][0]
-    elif n == 2:
-        det = determinant_2x2(m)
-        steps.append("Usando fórmula 2×2: det(A) = ad - bc")
-    elif n == 3 and method in ("sarrus", "cramer"):
-        det = determinant_3x3_sarrus(m)
-        steps.append("Usando regla de Sarrus (3×3)")
+    det = 0.0
+    
+    if method == "cramer":
+        det = _cramer_det(m, steps)
     else:
-        # expansión por cofactores sobre la primera fila
-        def cofactor_det(a: Matrix) -> float:
-            k = len(a)
-            if k == 1:
-                return a[0][0]
-            if k == 2:
-                return determinant_2x2(a)
-            total = 0.0
-            for j in range(k):
-                minor = [row[:j] + row[j + 1 :] for row in a[1:]]
-                total += ((-1) ** j) * a[0][j] * cofactor_det(minor)
-            return total
+        rows = len(m)
+        cols = len(m[0])
+        
+        if rows != cols:
+            return StepResult(steps=["La matriz debe ser cuadrada para este método."], error="not_square")
+            
+        steps.append("Matriz A:")
+        steps.append(format_matrix(m))
+        
+        if rows == 1:
+            det = m[0][0]
+            steps.append(f"Matriz 1x1: {det}")
+        elif rows == 2:
+            det = _det_2x2_steps(m, steps)
+        elif rows == 3 and method == "sarrus":
+            det = _det_3x3_sarrus_steps(m, steps)
+        else:
+            det = _det_cofactors_recursive(m, steps)
 
-        det = cofactor_det(m)
-        steps.append("Usando expansión por cofactores (1ª fila)")
-
-    steps.append(f"det(A) = {det}")
+    steps.append("-" * 40)
+    steps.append(f"RESULTADO FINAL: det = {det}")
     return StepResult(steps=steps, determinant=det)
