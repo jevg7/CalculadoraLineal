@@ -134,7 +134,7 @@ Configura el Frontend (React)
 npm install
 
 
-Ejecución
+# Ejecución
 
 Necesitarás dos terminales corriendo simultáneamente:
 
