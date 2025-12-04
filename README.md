@@ -151,6 +151,4 @@ npm run dev
 
 <div align="center">
 <sub>Construido con ❤️ y muchas matrices</sub>
-<br />
-<a href="https://www.google.com/search?q=https://github.com/jevg7/CalculadoraLineal">Repositorio Oficial</a>
-</div>
+
