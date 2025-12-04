@@ -45,14 +45,20 @@ Interfaz: [ React ]
 
 📸 Capturas de Pantalla
 
-
-
 Panel de Matrices
+<img width="1638" height="895" alt="matriz-vector" src="https://github.com/user-attachments/assets/b99dfd2d-0717-41d9-806b-6095ca642151" />
 
+Operaciones con Matrices
 
+<img width="1908" height="900" alt="operaciones" src="https://github.com/user-attachments/assets/5cacf67f-13d5-45e5-86b7-3464148f7523" />
 
+Sistemas Lineales
 
+<img width="1903" height="898" alt="sistemas" src="https://github.com/user-attachments/assets/a9a5039b-7cab-4b2f-914e-6f1b978cee3d" />
 
+Metodos Numericos
+
+<img width="1908" height="907" alt="metodos" src="https://github.com/user-attachments/assets/ab80df66-2270-49c7-b03d-ab24130ad405" />
 
 
 🚀 Instalación y Uso
