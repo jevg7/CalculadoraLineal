@@ -45,13 +45,13 @@ Este proyecto destaca por tener su propio motor de cálculo. No dependemos de li
 <div align="center">
 
 
-Backend / Lógica
+Backend / Lógica:
 Implementación 100% propia. Todos los algoritmos de álgebra lineal (Gauss, Inversas, Multiplicaciones) fueron desarrollados por el equipo.
 
-Interfaz
+Interfaz:
 Frontend moderno y reactivo para una experiencia de usuario fluida
 
-Auxiliar
+Auxiliar:
 Utilizado exclusivamente para el cálculo simbólico de derivadas en el método de Newton-Raphson.
 
 </div>
