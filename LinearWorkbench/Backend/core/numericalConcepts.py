@@ -1,4 +1,5 @@
 import math
+import sympy as sp
 from typing import Dict, Callable
 from .common import StepResult
 
@@ -101,25 +102,56 @@ def _eval_function(expr: str, x: float) -> float:
 
 def solve_bisection(expr: str, a: float, b: float, tol: float, max_iter: int) -> StepResult:
     steps: list[str] = []
+    
     fa = _eval_function(expr, a)
     fb = _eval_function(expr, b)
-    steps.append(f"f(x) = {expr}")
-    steps.append(f"[a,b] = [{a},{b}], f(a)={fa}, f(b)={fb}")
+    
+    steps.append('════════════════════════════════════════════')
+    steps.append('       MÉTODO DE BISECCIÓN (DETALLADO)')
+    steps.append('════════════════════════════════════════════')
+    steps.append(f'Función: f(x) = {expr}')
+    steps.append(f'Intervalo inicial: [{a}, {b}]')
+    steps.append(f'f({a}) = {fa:.6f}')
+    steps.append(f'f({b}) = {fb:.6f}')
+    steps.append('')
+
     if fa * fb > 0:
-        steps.append("f(a) y f(b) tienen el mismo signo → no se garantiza raíz")
+        steps.append('ERROR: f(a) y f(b) tienen el mismo signo.')
+        steps.append('No se cumple el teorema de Bolzano.')
         return StepResult(steps=steps, error="same_sign")
+    
+    steps.append('Chequeo de signo: f(a) * f(b) < 0 -> OK')
+    steps.append('----------------------------------------')
+
     for k in range(1, max_iter + 1):
         c = (a + b) / 2.0
         fc = _eval_function(expr, c)
-        steps.append(f"Iteración {k}: c={c}, f(c)={fc}")
-        if abs(fc) < tol or (b - a) / 2.0 < tol:
-            steps.append("Condición de paro alcanzada")
+        error = (b - a) / 2.0
+        
+        steps.append(f"Iteración {k}:")
+        steps.append(f"  a={a:.6f}, b={b:.6f}")
+        steps.append(f"  Punto medio (c) = ({a:.4f} + {b:.4f}) / 2 = {c:.6f}")
+        steps.append(f"  f(c) = {fc:.8f}")
+        steps.append(f"  Error est. = {error:.8f}")
+
+        if abs(fc) < tol or error < tol:
+            steps.append("")
+            steps.append("  ✓ Condición de parada alcanzada (tolerancia)")
+            steps.append('════════════════════════════════════════════')
+            steps.append(f"  RAÍZ APROX: {c:.8f}")
             return StepResult(steps=steps, vector=[c])
+
         if fa * fc < 0:
-            b, fb = c, fc
+            steps.append("  Signos opuestos entre a y c -> Nuevo intervalo [a, c]")
+            b = c
+            fb = fc # 
         else:
-            a, fa = c, fc
-    steps.append("Máx. iteraciones alcanzado")
+            steps.append("  Signos opuestos entre c y b -> Nuevo intervalo [c, b]")
+            a = c
+            fa = fc 
+        steps.append("")
+
+    steps.append("AVISO: Máximo de iteraciones alcanzado.")
     return StepResult(steps=steps, vector=[(a + b) / 2.0])
 
 def solve_false_position(expr: str, a: float, b: float, tol: float, max_iter: int) -> StepResult:
@@ -143,66 +175,181 @@ def solve_false_position(expr: str, a: float, b: float, tol: float, max_iter: in
 
     if fa * fb > 0:
         steps.append('ERROR: f(a) y f(b) deben tener signos opuestos')
-        steps.append('No se puede garantizar una raíz en este intervalo.')
         return StepResult(steps=steps, error="same_sign")
 
-    steps.append('Condición verificada: f(a) × f(b) < 0 ✓')
-    steps.append('Existe al menos una raíz en el intervalo.')
-    steps.append('')
-    steps.append('Fórmula de interpolación lineal:')
-    steps.append('c = b - f(b) × (b - a) / (f(b) - f(a))')
-    steps.append('')
-    steps.append('─────────────────────────────────────────────')
-    steps.append('')
-
-    a_val = a
-    b_val = b
-    c_prev = a_val
+    a_val, b_val = a, b
     c = a_val
-    fc = fa
     iteration = 0
+    c_prev = a_val
 
     while iteration < max_iter:
         fa = _eval_function(expr, a_val)
         fb = _eval_function(expr, b_val)
+        
+        # Evitar división por cero si fa == fb (raro pero posible)
+        if abs(fb - fa) < 1e-15:
+            steps.append("Error: Denominador cercano a cero en interpolación.")
+            break
 
-        # Fórmula de regla falsa
         c = b_val - (fb * (b_val - a_val)) / (fb - fa)
         fc = _eval_function(expr, c)
-
         error = abs(c - c_prev) if iteration > 0 else abs(b_val - a_val)
 
         steps.append(f'Iteración {iteration + 1}:')
-        steps.append(f'  a = {a_val:.6f}, f(a) = {fa:.6f}')
-        steps.append(f'  b = {b_val:.6f}, f(b) = {fb:.6f}')
-        steps.append(f'  c = {c:.6f}')
-        steps.append(f'  f(c) = {fc:.6f}')
-        steps.append(f'  Error = {error:.6f}')
+        steps.append(f'  Intervalo: [{a_val:.5f}, {b_val:.5f}]')
+        steps.append(f'  c = {b_val:.5f} - ({fb:.4f}*({b_val:.4f}-{a_val:.4f}))/({fb:.4f}-{fa:.4f})')
+        steps.append(f'  c = {c:.6f}, f(c) = {fc:.8f}')
+        steps.append(f'  Error = {error:.8f}')
 
         if abs(fc) < tol or error < tol:
             steps.append('  ✓ Convergencia alcanzada!')
-            steps.append('')
             break
 
         if fa * fc < 0:
             b_val = c
-            steps.append(f'  Nueva búsqueda: [{a_val:.6f}, {c:.6f}]')
         else:
             a_val = c
-            steps.append(f'  Nueva búsqueda: [{c:.6f}, {b_val:.6f}]')
-        steps.append('')
-
+        
+        steps.append("")
         c_prev = c
         iteration += 1
 
     steps.append('═════════════════════════════════════════════')
     steps.append(f'  RAÍZ ENCONTRADA: x ≈ {c:.8f}')
-    steps.append(f'  f({c:.8f}) = {fc:.10f}')
-    steps.append(f'  Iteraciones: {iteration + 1}')
-    steps.append('═════════════════════════════════════════════')
-    steps.append('')
-    steps.append('Ventaja sobre bisección:')
-    steps.append('La regla falsa usa interpolación lineal, lo que')
-    steps.append('generalmente converge más rápido que bisección.')
-
     return StepResult(steps=steps, vector=[c])
+
+
+def solve_newton_raphson(expr: str, x0: float, tol: float, max_iter: int) -> StepResult:
+
+    steps: list[str] = []
+    
+    #Configuración de SymPy
+    try:
+        x_sym = sp.symbols('x')
+        
+        # Convertir el string a expresión simbólica (ej: "x^2 - 4" -> x**2 - 4)
+        # sympify es inteligente y entiende 'sin', 'cos', 'exp', etc.
+        f_expr = sp.sympify(expr.replace('^', '**'))
+        
+        # Calcular la derivada simbólica
+        df_expr = sp.diff(f_expr, x_sym)
+        
+        # Convertir a funciones rápidas de Python para evaluar números
+        f_func = sp.lambdify(x_sym, f_expr, modules=['math'])
+        df_func = sp.lambdify(x_sym, df_expr, modules=['math'])
+        
+    except Exception as e:
+        return StepResult(steps=[f"Error al calcular la derivada: {e}"], error="parse_error")
+
+    
+    steps.append('════════════════════════════════════════════')
+    steps.append('    MÉTODO DE NEWTON-RAPHSON (CON SYMPY)')
+    steps.append('════════════════════════════════════════════')
+    steps.append(f'Función original: f(x) = {expr}')
+    steps.append(f'Derivada calculada: f\'(x) = {df_expr}') 
+    steps.append(f'Semilla inicial: x0 = {x0}')
+    steps.append('')
+    steps.append('Fórmula iterativa:')
+    steps.append('x(i+1) = x(i) - f(x(i)) / f\'(x(i))')
+    steps.append('----------------------------------------')
+
+    x_curr = x0
+    
+    # 3. Ciclo iterativo
+    for i in range(1, max_iter + 1):
+        try:
+            # Evaluamos usando las funciones compiladas por SymPy
+            fx = f_func(x_curr)
+            dfx = df_func(x_curr)
+        except Exception as e:
+            steps.append(f"Error matemático al evaluar (dominio inválido): {str(e)}")
+            return StepResult(steps=steps, error="math_error")
+
+        steps.append(f"Iteración {i}:")
+        steps.append(f"  x_actual = {x_curr:.8f}")
+        steps.append(f"  f(x)     = {fx:.8f}")
+        steps.append(f"  f'(x)    = {dfx:.8f}")
+
+        
+        if abs(dfx) < 1e-15:
+            steps.append("  ERROR CRÍTICO: La derivada es 0 (o muy cercana).")
+            steps.append("  No se puede dividir. El método falla (pendiente horizontal).")
+            return StepResult(steps=steps, error="zero_derivative")
+
+        
+        x_next = x_curr - (fx / dfx)
+        error = abs(x_next - x_curr)
+        
+        steps.append(f"  x_sig    = {x_curr:.6f} - ({fx:.6f} / {dfx:.6f})")
+        steps.append(f"           = {x_next:.8f}")
+        steps.append(f"  Error    = {error:.8f}")
+
+        
+        if error < tol or abs(fx) < tol:
+            steps.append("")
+            steps.append("  ✓ Convergencia alcanzada")
+            steps.append('════════════════════════════════════════════')
+            steps.append(f"  RAÍZ APROXIMADA: {x_next:.10f}")
+            return StepResult(steps=steps, vector=[x_next])
+
+        x_curr = x_next
+        steps.append("")
+
+    steps.append("AVISO: Se alcanzó el número máximo de iteraciones sin converger completamente.")
+    return StepResult(steps=steps, vector=[x_curr])
+
+
+def solve_secant(expr: str, x0: float, x1: float, tol: float, max_iter: int) -> StepResult:
+    """
+    Resuelve usando el método de la Secante (requiere dos puntos iniciales).
+    """
+    steps: list[str] = []
+    steps.append('════════════════════════════════════════════')
+    steps.append('          MÉTODO DE LA SECANTE')
+    steps.append('════════════════════════════════════════════')
+    steps.append(f'Función f(x) = {expr}')
+    steps.append(f'Puntos iniciales: x0={x0}, x1={x1}')
+    steps.append('')
+    steps.append('Fórmula: x(i+1) = x(i) - [f(x(i))*(x(i)-x(i-1))] / [f(x(i))-f(x(i-1))]')
+    steps.append('----------------------------------------')
+
+    x_prev = x0
+    x_curr = x1
+
+    fx_prev = _eval_function(expr, x_prev)
+    
+    for i in range(1, max_iter + 1):
+        fx_curr = _eval_function(expr, x_curr)
+        
+        steps.append(f"Iteración {i}:")
+        steps.append(f"  x(i-1) = {x_prev:.6f}, f(x(i-1)) = {fx_prev:.6f}")
+        steps.append(f"  x(i)   = {x_curr:.6f}, f(x(i))   = {fx_curr:.6f}")
+
+        denom = fx_curr - fx_prev
+        if abs(denom) < 1e-15:
+            steps.append("  ERROR: Denominador cero (f(x_i) ≈ f(x_i-1)).")
+            return StepResult(steps=steps, error="zero_denominator")
+
+       
+        x_next = x_curr - (fx_curr * (x_curr - x_prev)) / denom
+        error = abs(x_next - x_curr)
+
+        steps.append(f"  x(i+1) = {x_curr:.6f} - ...")
+        steps.append(f"  x(i+1) = {x_next:.8f}")
+        steps.append(f"  Error est. = {error:.8f}")
+
+        if error < tol or abs(fx_curr) < tol:
+            steps.append("")
+            steps.append("  ✓ Convergencia alcanzada")
+            steps.append('════════════════════════════════════════════')
+            steps.append(f"  RAÍZ: {x_next:.8f}")
+            return StepResult(steps=steps, vector=[x_next])
+
+        
+        x_prev = x_curr
+        fx_prev = fx_curr
+        x_curr = x_next
+        steps.append("")
+
+    steps.append("AVISO: No convergió en el máximo de iteraciones.")
+    return StepResult(steps=steps, vector=[x_curr])

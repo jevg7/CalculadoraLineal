@@ -13,6 +13,7 @@ from core.matrixOperations import (
 from core.linearSystems import solve_linear_system_gauss_jordan
 from core.vectorLab import check_independence, check_basis
 from core.determinants import determinant_with_steps
+
 from core.numericalConcepts import (
     decompose_base10,
     decompose_base2,
@@ -21,6 +22,8 @@ from core.numericalConcepts import (
     demonstrate_propagation,
     solve_bisection,
     solve_false_position,
+    solve_newton_raphson,
+    solve_secant,
 )
 
 
@@ -113,6 +116,18 @@ class BisectionRequest(BaseModel):
     tol: float = 1e-4
     max_iter: int = 50
 
+class NewtonRaphsonRequest(BaseModel):
+    expr: str
+    x0: float
+    tol: float = 1e-4
+    max_iter: int = 50
+
+class SecantRequest(BaseModel):
+    expr: str
+    x0: float
+    x1: float
+    tol: float = 1e-4
+    max_iter: int = 50
 
 class NumericalResponse(BaseModel):
     value: Optional[float] = None
@@ -224,6 +239,28 @@ def numerical_false_position(payload: BisectionRequest):
         steps=res.steps,
         error=res.error,
     )
+
+@app.post("/numerical/newton-raphson", response_model=NumericalResponse)
+def numerical_newton_raphson(payload: NewtonRaphsonRequest):
+    res = solve_newton_raphson(payload.expr, payload.x0, payload.tol, payload.max_iter)
+    value = res.vector[0] if res.vector else None
+    return NumericalResponse(
+        value=value,
+        steps=res.steps,
+        error=res.error,
+    )
+
+@app.post("/numerical/secant", response_model=NumericalResponse)
+def numerical_secant(payload: SecantRequest):
+    res = solve_secant(payload.expr, payload.x0, payload.x1, payload.tol, payload.max_iter)
+    value = res.vector[0] if res.vector else None
+    return NumericalResponse(
+        value=value,
+        steps=res.steps,
+        error=res.error,
+    )
+
+
 @app.get("/")
 def root():
     return {"message": "Numerical Lab API running"}
